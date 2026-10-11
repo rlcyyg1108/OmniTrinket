@@ -1,6 +1,7 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import com.rlcyyg1108.omnitrinket.OmniTrinket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -84,8 +85,8 @@ public final class SprintResumeEvents
 
         // 开关关闭 / 总开关关闭 / 界面打开 → 清空状态并退出。
         // 界面打开时玩家可能正在拖滑条或输入框，按键状态不代表真实意图。
-        if (!Config.COMMON.sprintEnabled.get()
-                || !Config.COMMON.resumeSprintAfterHittingObstacle.get()
+        if (!PlayerSettingsAccess.bool(player, PlayerSettings.SPRINT_ENABLED)
+                || !PlayerSettingsAccess.bool(player, PlayerSettings.SPRINT_RESUME)
                 || mc.screen != null)
         {
             reset();
@@ -126,7 +127,8 @@ public final class SprintResumeEvents
             // 刚离开墙面：消费① 记住的信息
             if (wasSprintingBeforeObstacle)
             {
-                resumeTicks = Config.COMMON.sprintResumeTicks.get();
+                resumeTicks = PlayerSettingsAccess.integer(
+                        player, PlayerSettings.SPRINT_RESUME_TICKS);
             }
             wasSprintingBeforeObstacle = false;
         }

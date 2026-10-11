@@ -1,6 +1,7 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import net.minecraft.world.entity.player.Player;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
 import com.rlcyyg1108.omnitrinket.client.ClientTooltips;
 import com.rlcyyg1108.omnitrinket.feature.TrinketFeature;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
@@ -43,9 +44,9 @@ public class FlightFeature implements TrinketFeature
     }
 
     @Override
-    public boolean isEnabled()
+    public boolean isEnabled(@Nullable Player player)
     {
-        return Config.COMMON.flyEnabled.get();
+        return PlayerSettingsAccess.bool(player, PlayerSettings.FLY_ENABLED);
     }
 
     @Override

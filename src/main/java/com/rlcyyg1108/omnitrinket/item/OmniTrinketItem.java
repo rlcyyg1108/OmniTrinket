@@ -69,9 +69,10 @@ public class OmniTrinketItem extends Item implements ICurioItem
     @Override
     public void onUnequip(SlotContext slotContext, ItemStack newStack, ItemStack stack)
     {
+        Player player = playerOf(slotContext);
         for (TrinketFeature feature : FeatureRegistry.all())
         {
-            if (feature.isEnabled())
+            if (feature.isEnabled(player))
             {
                 feature.onUnequip(slotContext, stack);
             }
@@ -84,9 +85,10 @@ public class OmniTrinketItem extends Item implements ICurioItem
         // cfg 允许为 null：某些功能不依赖玩家个人设置（例如生存模块），
         // 不应因为取不到设置就整体跳过。
         PlayerSettings cfg = getSettings(slotContext);
+        Player player = playerOf(slotContext);
         for (TrinketFeature feature : FeatureRegistry.all())
         {
-            if (feature.isEnabled())
+            if (feature.isEnabled(player))
             {
                 feature.curioTick(slotContext, stack, cfg);
             }
@@ -95,11 +97,26 @@ public class OmniTrinketItem extends Item implements ICurioItem
 
     private static @Nullable PlayerSettings getSettings(SlotContext ctx)
     {
-        if (ctx.entity() instanceof Player player)
-        {
-            return PlayerSettingsHelper.get(player).orElse(null);
-        }
-        return null;
+        Player player = playerOf(ctx);
+        return player == null ? null : PlayerSettingsHelper.get(player).orElse(null);
+    }
+
+    /** 从 Curios 槽位上下文里取玩家；拿不到返回 null */
+    private static @Nullable Player playerOf(SlotContext ctx)
+    {
+        return ctx.entity() instanceof Player player ? player : null;
+    }
+
+    /**
+     * 本机玩家 —— <b>仅供 tooltip</b>。
+     *
+     * <p>原版 {@code appendHoverText} 没有玩家参数，而"功能是否启用"现在是
+     * 每玩家的，所以只能取本机玩家。tooltip 只在客户端构建，这个值必然非空；
+     * 用 {@code DistExecutor} 包一层是为了专用服务端不去解析客户端类。</p>
+     */
+    private static @Nullable Player localPlayer()
+    {
+        return DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> ClientTooltips::localPlayer);
     }
 
     // ------------------------------------------------------------------
@@ -116,10 +133,11 @@ public class OmniTrinketItem extends Item implements ICurioItem
         // 紧跟"生效"行之后：怎么打开设置界面
         tooltip.add(openSettingsHint());
 
-        // 逐功能列出当前状态（读取各自的总开关）
+        // 逐功能列出当前状态（读的是"本机玩家"的开关）
+        Player player = localPlayer();
         for (TrinketFeature feature : FeatureRegistry.all())
         {
-            addFeatureTooltip(feature, tooltip);
+            addFeatureTooltip(feature, player, tooltip);
         }
     }
 
@@ -150,10 +168,11 @@ public class OmniTrinketItem extends Item implements ICurioItem
      * <p><b>快捷键行的颜色由各功能自己决定</b>（见 {@code ClientTooltips}：
      * 键位深紫、其余绿色），这里不再统一染色，否则会把键位的紫色盖掉。</p>
      */
-    private static void addFeatureTooltip(TrinketFeature feature, List<Component> tooltip)
+    private static void addFeatureTooltip(TrinketFeature feature,
+                                          @Nullable Player player, List<Component> tooltip)
     {
         String key = "tooltip.omnitrinket." + feature.getId();
-        if (feature.isEnabled())
+        if (feature.isEnabled(player))
         {
             tooltip.add(Component.translatable(key).withStyle(ChatFormatting.AQUA));
 

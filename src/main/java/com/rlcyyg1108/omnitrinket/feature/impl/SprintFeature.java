@@ -1,6 +1,8 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
+import net.minecraft.world.entity.player.Player;
 import com.rlcyyg1108.omnitrinket.feature.TrinketFeature;
 
 /**
@@ -33,9 +35,9 @@ public class SprintFeature implements TrinketFeature
     }
 
     @Override
-    public boolean isEnabled()
+    public boolean isEnabled(Player player)
     {
-        return Config.COMMON.sprintEnabled.get();
+        return PlayerSettingsAccess.bool(player, PlayerSettings.SPRINT_ENABLED);
     }
 
     // 注意：移速 / 跳跃的实际逻辑**不**在这里驱动。

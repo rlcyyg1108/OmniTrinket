@@ -1,6 +1,7 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
+import net.minecraft.world.entity.player.Player;
 import com.rlcyyg1108.omnitrinket.client.ClientTooltips;
 import com.rlcyyg1108.omnitrinket.feature.TrinketFeature;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
@@ -16,9 +17,10 @@ import top.theillusivec4.curios.api.SlotContext;
  *
  * 包含：
  * - 夜视（药水效果，每 5 秒续一次 20 秒的 night_vision，无粒子）
+ * - 饱和（与夜视同一套写法，佩戴期间饱食度保持常满）
  * - 触及范围（方块 + 实体，配置值语义为"最终总格数"）
  *
- * <p>两者的实际逻辑都在 {@link BuffEvents} 里，由 {@code PlayerTickEvent} 每 tick 驱动。</p>
+ * <p>三者的实际逻辑都在 {@link BuffEvents} 里，由 {@code PlayerTickEvent} 每 tick 驱动。</p>
  *
  * <p><b>为什么不走 Curios 的 {@code getAttributeModifiers}：</b>那个接口只在
  * 装备 / 卸下时调用一次，改完配置必须重新装备才生效。改成每 tick 主动挂载后
@@ -35,15 +37,15 @@ public class BuffFeature implements TrinketFeature
     }
 
     @Override
-    public boolean isEnabled()
+    public boolean isEnabled(Player player)
     {
-        return Config.COMMON.buffEnabled.get();
+        return PlayerSettingsAccess.bool(player, PlayerSettings.BUFF_ENABLED);
     }
 
     @Override
     public void curioTick(SlotContext ctx, ItemStack stack, PlayerSettings cfg)
     {
-        // 触及范围与夜视都由 BuffEvents 的 PlayerTickEvent 驱动：
+        // 触及范围、夜视、饱和都由 BuffEvents 的 PlayerTickEvent 驱动：
         // curioTick 只在佩戴时触发，摘下后状态回收不掉（血泪教训）。
     }
 
@@ -52,6 +54,9 @@ public class BuffFeature implements TrinketFeature
      *
      * <p>键位查询是客户端专有的，所以用 {@code DistExecutor} 包一层，
      * 避免专用服务端加载 {@code ClientTooltips} 时报 NoClassDefFoundError。</p>
+     *
+     * <p>按约定，tooltip 只提示默认键（X / Z / N）；饱和虽然也可绑定，
+     * 但默认未绑定、属于玩家自选配置，不在这里展示。</p>
      */
     @Override
     public @Nullable Component extraTooltip()

@@ -21,10 +21,12 @@ import net.minecraftforge.fml.common.Mod;
  * {@code ServerPlayer.onUpdateAbilities()} 才能把新的 Abilities <b>同步给客户端</b>，
  * 否则客户端 LocalPlayer 的 mayfly 仍是 false，双击跳跃会被原版逻辑拒绝。</p>
  *
- * <h3>2. 飞行速度（本轮重构的核心）</h3>
- * <p><b>飞行速度完全由原版决定</b>：本模组不修改
- * {@code Abilities.flyingSpeed}，也不做任何速度倍率修正 ——
- * 飞行速度沿用原版表现。</p>
+ * <h3>2. 飞行速度</h3>
+ * <p>服务端每 tick 把"倍率 × 原版基准速度"写进 {@code Abilities.flyingSpeed}，
+ * 再由 {@code onUpdateAbilities()} 走原版 {@code ClientboundPlayerAbilitiesPacket}
+ * 同步到客户端 —— 零 Mixin、零自定义同步。水平与垂直共用同一个
+ * {@code getFlyingSpeed()}，所以这一个值同时对两轴生效；冲刺时先乘
+ * "冲刺飞行速度倍率"、再除以 2（抵消原版硬编码的 ×2）。</p>
  *
  * <h3>3. 为什么每 tick 检查而不是只在 curioTick</h3>
  * <p>curioTick 只在佩戴时触发，摘下后就不再执行，留下的状态回收不掉。
@@ -67,7 +69,7 @@ public final class FlightEvents
             return;
         }
 
-        boolean featureOn = Config.COMMON.flyEnabled.get();
+        boolean featureOn = settings.getBoolean(PlayerSettings.FLY_ENABLED);
         boolean wearing = TrinketHelper.isEquipped(player);
 
         if (!featureOn || !wearing)
@@ -83,9 +85,9 @@ public final class FlightEvents
         // 注意：不要在这里读任何配置决定飞行状态 —— 早先"锁定飞行"是在这里
         // 从 Config 读一次，导致必须重新装备才生效。现在锁定飞行是一个
         // 可以随时翻转的 PlayerSettings 字段，下面每 tick 直接检查它。
-        if (!settings.isFlyGranted())
+        if (!settings.getBoolean(PlayerSettings.FLY_GRANTED))
         {
-            settings.setFlyGranted(true);
+            settings.setBoolean(PlayerSettings.FLY_GRANTED, true);
         }
 
         if (!abilities.mayfly)
@@ -97,7 +99,7 @@ public final class FlightEvents
         // 锁定飞行：强制保持飞行中，不允许落地收起。
         // flyLocked 是 PlayerSettings 字段，界面开关 / 快捷键改的就是它，
         // 这一段每 tick 都会跑，所以随开随关。
-        if (settings.isFlyLocked() && !abilities.flying)
+        if (settings.getBoolean(PlayerSettings.FLY_LOCKED) && !abilities.flying)
         {
             abilities.flying = true;
             changed = true;
@@ -111,8 +113,8 @@ public final class FlightEvents
         //
         //   水平与垂直同时生效：原版两者读的是同一个 getFlyingSpeed()。
         //   冲刺时：原版 getFlyingSpeed() 自己会再乘 2，所以这里要把
-        //   写入值除以 2，让"最终倍率"恰好等于 flySprintMultiplier。
-        float target = targetFlyingSpeed(player);
+        //   写入值除以 2，让"最终倍率"恰好等于 FLY_SPRINT。
+        float target = targetFlyingSpeed(player, settings);
         if (Math.abs(abilities.getFlyingSpeed() - target) > 1.0E-6F)
         {
             abilities.setFlyingSpeed(target);
@@ -132,9 +134,9 @@ public final class FlightEvents
     /**
      * 写入 {@code Abilities.flyingSpeed} 的目标值。
      *
-     * <p><b>非冲刺</b>：{@code 0.05 × flySpeedMultiplier}。</p>
+     * <p><b>非冲刺</b>：{@code 0.05 × FLY_SPEED}。</p>
      *
-     * <p><b>冲刺时</b>：{@code 0.05 × flySpeedMultiplier × flySprintMultiplier}，
+     * <p><b>冲刺时</b>：{@code 0.05 × FLY_SPEED × FLY_SPRINT}，
      * 即"冲刺飞行速度倍率"是<b>乘</b>在飞行速度之上的独立乘区
      * （不是替换飞行速度）。</p>
      *
@@ -143,14 +145,14 @@ public final class FlightEvents
      * 若不抵消，最终速度会变成目标的 2 倍。这里先把写入值除以 2，
      * 原版再乘 2 之后恰好回到我们想要的倍率。</p>
      */
-    private static float targetFlyingSpeed(Player player)
+    private static float targetFlyingSpeed(Player player, PlayerSettings settings)
     {
-        double multiplier = Config.COMMON.flySpeedMultiplier.get();
+        double multiplier = settings.getDouble(PlayerSettings.FLY_SPEED);
 
         if (player.isSprinting())
         {
             // 冲刺倍率是"乘区"，不是替换
-            multiplier *= Config.COMMON.flySprintMultiplier.get();
+            multiplier *= settings.getDouble(PlayerSettings.FLY_SPRINT);
             // 抵消原版 getFlyingSpeed() 里硬编码的冲刺 ×2
             multiplier /= 2.0D;
         }
@@ -166,10 +168,10 @@ public final class FlightEvents
         Abilities abilities = player.getAbilities();
         boolean changed = false;
 
-        if (settings.isFlyGranted())
+        if (settings.getBoolean(PlayerSettings.FLY_GRANTED))
         {
-            settings.setFlyGranted(false);
-            settings.setFlyLocked(false);
+            settings.setBoolean(PlayerSettings.FLY_GRANTED, false);
+            settings.setBoolean(PlayerSettings.FLY_LOCKED, false);
 
             // 只收回"我们授予的"，创造 / 旁观自带的飞行不动
             if (!player.isCreative() && !player.isSpectator())

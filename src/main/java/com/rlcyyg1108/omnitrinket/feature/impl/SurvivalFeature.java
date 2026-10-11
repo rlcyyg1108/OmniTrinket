@@ -1,6 +1,6 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
 import com.rlcyyg1108.omnitrinket.feature.TrinketFeature;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import net.minecraft.world.entity.player.Player;
@@ -31,9 +31,9 @@ public class SurvivalFeature implements TrinketFeature
     }
 
     @Override
-    public boolean isEnabled()
+    public boolean isEnabled(Player player)
     {
-        return Config.COMMON.survivalEnabled.get();
+        return PlayerSettingsAccess.bool(player, PlayerSettings.SURVIVAL_ENABLED);
     }
 
     @Override
@@ -45,7 +45,7 @@ public class SurvivalFeature implements TrinketFeature
         }
 
         // 水下不消耗氧气：持续把空气值补满
-        if (Config.COMMON.noOxygenConsumption.get())
+        if (PlayerSettingsAccess.bool(player, PlayerSettings.SURVIVAL_NO_OXYGEN))
         {
             int maxAir = player.getMaxAirSupply();
             if (player.getAirSupply() < maxAir)

@@ -1,5 +1,6 @@
 package com.rlcyyg1108.omnitrinket.feature;
 
+import net.minecraft.world.entity.player.Player;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -40,9 +41,15 @@ public interface TrinketFeature
     }
 
     /**
-     * 本功能是否可以启用（通常读取全局配置的总开关）。
+     * 本功能对某个玩家是否启用。
+     *
+     * <p>总开关也是"每玩家一份"的，所以判定必须带上玩家：
+     * 服务端读 capability、客户端读本机镜像（见 {@code PlayerSettingsAccess}）。</p>
+     *
+     * @param player 目标玩家；tooltip 这类拿不到玩家的场合会传 {@code null}，
+     *               实现应按默认值处理
      */
-    default boolean isEnabled()
+    default boolean isEnabled(@Nullable Player player)
     {
         return true;
     }

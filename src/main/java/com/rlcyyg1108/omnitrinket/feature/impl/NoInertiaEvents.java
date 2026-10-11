@@ -1,6 +1,7 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import com.rlcyyg1108.omnitrinket.OmniTrinket;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -46,15 +47,15 @@ public final class NoInertiaEvents
         {
             return;
         }
-        if (!Config.COMMON.flyNoInertia.get())
-        {
-            return;
-        }
-
         Player player = event.player;
 
         // 服务端 tick 里 xxa/zza 恒为 0，若不排除会在服务端错误地压速度
         if (!(player instanceof LocalPlayer))
+        {
+            return;
+        }
+        // 每玩家开关：这段只在客户端跑，所以读的是本机镜像
+        if (!PlayerSettingsAccess.bool(player, PlayerSettings.FLY_NO_INERTIA))
         {
             return;
         }

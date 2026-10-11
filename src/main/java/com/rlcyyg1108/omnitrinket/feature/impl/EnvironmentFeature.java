@@ -1,5 +1,6 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
+import net.minecraft.world.entity.player.Player;
 import com.rlcyyg1108.omnitrinket.Config;
 import com.rlcyyg1108.omnitrinket.feature.TrinketFeature;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
@@ -32,10 +33,11 @@ public class EnvironmentFeature implements TrinketFeature
     }
 
     @Override
-    public boolean isEnabled()
+    public boolean isEnabled(Player player)
     {
         // 环境模块没有独立总开关：两个子项各自开关即可，
         // 这里返回"是否有任一子项开启"，用于 tooltip 的状态显示。
+        // 注意：环境是**全局**配置（不加玩家前缀），player 参数在这里用不到。
         return Config.COMMON.lockWeatherClear.get() || Config.COMMON.perpetualDay.get();
     }
 

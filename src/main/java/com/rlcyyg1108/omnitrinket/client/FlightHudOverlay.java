@@ -1,14 +1,13 @@
 package com.rlcyyg1108.omnitrinket.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.rlcyyg1108.omnitrinket.OmniTrinket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
- * HUD 文字提示：切换飞行档位 / 夜视开关时，在<b>快捷栏上方</b>短暂显示一条消息。
+ * HUD 文字提示：切换飞行档位 / 各类开关（夜视、饱和、锁定飞行……）时，
+ * 在<b>快捷栏上方</b>短暂显示一条消息。
  *
  * <p>纯客户端显示，不影响任何游戏逻辑。显示约 2 秒后自动淡出。</p>
  *

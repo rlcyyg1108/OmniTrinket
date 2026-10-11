@@ -6,7 +6,7 @@ import java.util.List;
  * 飞行速度的档位预设。
  *
  * <p>X 键在 1 / 2 / 3 / 5 / 10 倍之间循环，修改的是
- * {@code Config.COMMON.flySpeedMultiplier} 这一个值。</p>
+ * {@code PlayerSettings.FLY_SPEED} 这一个值（每玩家一份）。</p>
  */
 public final class FlightSpeeds
 {

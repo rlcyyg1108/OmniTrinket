@@ -1,6 +1,7 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import com.rlcyyg1108.omnitrinket.OmniTrinket;
 import com.rlcyyg1108.omnitrinket.util.TrinketHelper;
 import net.minecraft.world.entity.player.Player;
@@ -12,7 +13,7 @@ import net.minecraftforge.fml.common.Mod;
 /**
  * 生存模块的客户端渲染处理。
  *
- * 目前只负责"去掉屏幕上的火焰动画"。
+ * 目前只负责"去除着火屏幕特效"（屏幕上的火焰遮罩）。
  * 使用 Forge 官方的 RenderBlockScreenEffectEvent（OverlayType.FIRE），
  * 无需 Mixin 即可取消火焰遮罩渲染。
  *
@@ -28,11 +29,12 @@ public class SurvivalClientEvents
         {
             return;
         }
-        if (!Config.COMMON.removeFireOverlay.get())
+        // 每玩家开关：本事件只在客户端触发，所以读的是本机镜像
+        Player player = event.getPlayer();
+        if (!PlayerSettingsAccess.bool(player, PlayerSettings.SURVIVAL_NO_FIRE_OVERLAY))
         {
             return;
         }
-        Player player = event.getPlayer();
         if (TrinketHelper.isEquipped(player))
         {
             event.setCanceled(true);

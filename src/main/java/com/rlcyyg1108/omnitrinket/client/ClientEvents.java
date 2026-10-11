@@ -1,6 +1,5 @@
 package com.rlcyyg1108.omnitrinket.client;
 
-import com.rlcyyg1108.omnitrinket.Config;
 import com.rlcyyg1108.omnitrinket.OmniTrinket;
 import com.rlcyyg1108.omnitrinket.client.gui.OmniTrinketSettingsScreen;
 import com.rlcyyg1108.omnitrinket.feature.impl.FlightSpeeds;
@@ -8,8 +7,10 @@ import com.rlcyyg1108.omnitrinket.network.ClientSettingsCache;
 import com.rlcyyg1108.omnitrinket.network.KeyActionPacket;
 import com.rlcyyg1108.omnitrinket.network.NetworkHandler;
 import com.rlcyyg1108.omnitrinket.network.SetPlayerSettingsPacket;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingKey;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import com.rlcyyg1108.omnitrinket.util.TrinketHelper;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
@@ -18,16 +19,20 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import java.util.List;
+
 /**
  * 客户端事件：按键响应。
  *
  * - N：打开设置界面（界面已打开时由界面自己处理为"完成"，见
  *   {@link OmniTrinketSettingsScreen#keyPressed}）
- * - X：快捷切换飞行档位；Shift+X：重置为默认档位
+ * - X：快捷切换飞行档位（1/2/3/5/10 循环）
  * - Z：切换夜视开关
+ * - 其余开关默认<b>未绑定</b>，可在"控制"里自行绑定：饱和 / 锁定飞行 / 无惯性 /
+ *   免疫全部伤害 / 不消耗氧气 / 撞墙后恢复冲刺 / 保留虚空伤害（见 {@code TOGGLE_BINDINGS} 表）
  *
  * <p>飞行档位这类需要"服务端状态才能算出下一个值"的操作只发包请求；
- * 夜视开关这种客户端已知目标值的操作则先本地乐观更新（手感零延迟），
+ * 开关类（夜视 / 饱和 / …）客户端已知目标值，先本地乐观更新（手感零延迟），
  * 服务端确认后会回发权威值覆盖。</p>
  */
 @Mod.EventBusSubscriber(modid = OmniTrinket.MODID, value = Dist.CLIENT)
@@ -35,6 +40,35 @@ public final class ClientEvents
 {
     /** 上一 tick 是否还在世界里；用于只在"刚离开世界"时清一次缓存 */
     private static boolean wasInWorld = false;
+
+    /**
+     * 「可绑定开关」对照表：快捷键 → 设置项 → HUD 文案。
+     *
+     * <p>表驱动：以后再加可绑定开关，只需在这里加一行 —— 按键消费与队列排空
+     * 都会自动覆盖。默认键位约定见 {@code KeyBindings}：只有 N / X / Z 带默认键，
+     * 其余全部未绑定（未绑定的键不会产生点击，天然无副作用）。</p>
+     */
+    private record ToggleBinding(KeyMapping key, PlayerSettingKey<Boolean> setting, String hudKey)
+    {
+    }
+
+    private static final List<ToggleBinding> TOGGLE_BINDINGS = List.of(
+            new ToggleBinding(KeyBindings.TOGGLE_NIGHT_VISION, PlayerSettings.NIGHT_VISION,
+                    "omnitrinket.hud.night_vision"),
+            new ToggleBinding(KeyBindings.TOGGLE_SATURATION, PlayerSettings.SATURATION,
+                    "omnitrinket.hud.saturation"),
+            new ToggleBinding(KeyBindings.TOGGLE_FLY_LOCKED, PlayerSettings.FLY_LOCKED,
+                    "omnitrinket.hud.fly_locked"),
+            new ToggleBinding(KeyBindings.TOGGLE_FLY_NO_INERTIA, PlayerSettings.FLY_NO_INERTIA,
+                    "omnitrinket.hud.fly_no_inertia"),
+            new ToggleBinding(KeyBindings.TOGGLE_DAMAGE_IMMUNITY, PlayerSettings.SURVIVAL_NO_DAMAGE,
+                    "omnitrinket.hud.damage_immunity"),
+            new ToggleBinding(KeyBindings.TOGGLE_NO_OXYGEN, PlayerSettings.SURVIVAL_NO_OXYGEN,
+                    "omnitrinket.hud.no_oxygen"),
+            new ToggleBinding(KeyBindings.TOGGLE_SPRINT_RESUME, PlayerSettings.SPRINT_RESUME,
+                    "omnitrinket.hud.sprint_resume"),
+            new ToggleBinding(KeyBindings.TOGGLE_VOID_DAMAGE, PlayerSettings.SURVIVAL_VOID_DAMAGE,
+                    "omnitrinket.hud.void_damage"));
 
     private ClientEvents()
     {
@@ -88,15 +122,19 @@ public final class ClientEvents
         }
 
         // X：切换飞行速度档位（1/2/3/5/10 循环）。
-        // 速度是服务端每 tick 写进 Abilities.flyingSpeed 的，所以必须发包给服务端改，
-        // 改完由原版 abilities 包同步回客户端。客户端本地改 toml 不会有任何效果。
+        // 速度是服务端每 tick 写进 Abilities.flyingSpeed 的，所以必须发包给服务端改；
+        // 改完由原版 abilities 包同步回客户端（客户端本地改不会有任何效果）。
         while (KeyBindings.CYCLE_FLY_SPEED.consumeClick())
         {
             if (wearing)
             {
-                // 客户端从本机 toml 预测下一档用于 HUD 即时反馈；
-                // 实际生效由服务端改配置并写入 Abilities。
-                double predicted = FlightSpeeds.next(Config.COMMON.flySpeedMultiplier.get());
+                // HUD 显示的下一档直接取自本机镜像（服务端权威值的副本）。
+                // ★ 不再从本机数据去"猜"——那样在多人服务器上会显示错值。
+                double predicted = FlightSpeeds.next(
+                        ClientSettingsCache.getDouble(PlayerSettings.FLY_SPEED));
+                // 乐观写回镜像（与夜视开关同一套做法）：连按 X 时下一次预测才不会算错。
+                // 服务端改完会回发同步包覆盖成本机权威值。
+                ClientSettingsCache.setDouble(PlayerSettings.FLY_SPEED, predicted);
                 NetworkHandler.CHANNEL.sendToServer(
                         new KeyActionPacket(KeyActionPacket.ACTION_CYCLE_FLY_SPEED));
                 FlightHudOverlay.show(Component.translatable(
@@ -105,35 +143,39 @@ public final class ClientEvents
             }
         }
 
-        while (KeyBindings.TOGGLE_NIGHT_VISION.consumeClick())
+        // 开关类快捷键（表驱动）：默认只有 Z（夜视）带键，其余（饱和 / 锁定飞行 /
+        // 无惯性 / 免疫全部伤害 / 不消耗氧气 / 撞墙后恢复冲刺 / 保留虚空伤害）
+        // 默认未绑定，玩家在"控制"里按需绑定。未绑定的键不会产生点击，天然无副作用。
+        for (ToggleBinding t : TOGGLE_BINDINGS)
         {
-            if (wearing)
+            while (t.key().consumeClick())
             {
-                toggleNightVision();
+                if (wearing)
+                {
+                    toggleFlag(t);
+                }
             }
         }
     }
 
     /**
-     * 切换夜视开关。
+     * 翻转一个开关。
      *
-     * <p>目标值客户端自己就知道，所以先改本地镜像（开关手感零延迟），
+     * <p>目标值客户端自己就知道，所以先改本地镜像（手感零延迟），
      * 再发包让服务端真正改；服务端改完回发权威值，天然对齐。</p>
      *
-     * <p>与切档位一致：在快捷栏上方弹一条文字提示。</p>
+     * <p>随后在快捷栏上方弹一条提示（复用"开 / 关"文案键，不额外造词）。</p>
      */
-    private static void toggleNightVision()
+    private static void toggleFlag(ToggleBinding t)
     {
-        boolean next = !ClientSettingsCache.nightVision();
-        ClientSettingsCache.setLocalBoolean(PlayerSettings.KEY_NIGHT_VISION, next);
-        NetworkHandler.CHANNEL.sendToServer(
-                SetPlayerSettingsPacket.ofFlag(PlayerSettings.KEY_NIGHT_VISION, next));
-        // 复用已有的"开 / 关"文案键，不额外造词
-        FlightHudOverlay.show(Component.translatable("omnitrinket.hud.night_vision",
+        boolean next = !ClientSettingsCache.getBoolean(t.setting());
+        ClientSettingsCache.setBoolean(t.setting(), next);
+        NetworkHandler.CHANNEL.sendToServer(SetPlayerSettingsPacket.ofFlag(t.setting(), next));
+        FlightHudOverlay.show(Component.translatable(t.hudKey(),
                 Component.translatable(next ? "omnitrinket.gui.on" : "omnitrinket.gui.off")));
     }
 
-    /** 把三个按键的点击队列排空 */
+    /** 把全部按键的点击队列排空 */
     private static void drainKeybinds()
     {
         while (KeyBindings.OPEN_SETTINGS.consumeClick())
@@ -144,9 +186,12 @@ public final class ClientEvents
         {
             // 同上：界面里不处理 X，只丢掉排队，避免关闭界面的瞬间误触切档
         }
-        while (KeyBindings.TOGGLE_NIGHT_VISION.consumeClick())
+        for (ToggleBinding t : TOGGLE_BINDINGS)
         {
-            // 同上
+            // 开关类：同样只排空；未绑定的键不产生点击，天然无影响
+            while (t.key().consumeClick())
+            {
+            }
         }
     }
 

@@ -5,6 +5,7 @@ import com.rlcyyg1108.omnitrinket.client.KeyBindings;
 import com.rlcyyg1108.omnitrinket.network.ClientSettingsCache;
 import com.rlcyyg1108.omnitrinket.network.NetworkHandler;
 import com.rlcyyg1108.omnitrinket.network.SetPlayerSettingsPacket;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingKey;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
@@ -14,7 +15,6 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -90,7 +90,7 @@ public class OmniTrinketSettingsScreen extends Screen
     private static final int PAD = 8;
     /**
      * 内容区预留行数 —— 取所有分类中的最大值。
-     * <p>飞行 6 / 生存 6 / 移动 5 / 增益 3 / 环境 2 ⇒ 取 6。
+     * <p>飞行 6 / 生存 6 / 移动 5 / 增益 4 / 环境 2 ⇒ 取 6。
      * 这样面板高度固定，侧边栏（5 行）永远不会溢出。</p>
      */
     private static final int MAX_ROWS = 6;
@@ -209,12 +209,13 @@ public class OmniTrinketSettingsScreen extends Screen
         final java.util.function.Consumer<Boolean> setter;
         final boolean defaultValue;
         final boolean perPlayer;
-        final String settingsKey;
+        /** 每玩家开关对应的描述符；全局(Config)开关为 null */
+        final PlayerSettingKey<Boolean> settingsKey;
 
         ToggleRow(Button button,
                   java.util.function.BooleanSupplier getter,
                   java.util.function.Consumer<Boolean> setter,
-                  boolean defaultValue, boolean perPlayer, String settingsKey)
+                  boolean defaultValue, boolean perPlayer, PlayerSettingKey<Boolean> settingsKey)
         {
             this.button = button;
             this.getter = getter;
@@ -402,87 +403,70 @@ public class OmniTrinketSettingsScreen extends Screen
 
     private void buildFlight(int x, int y, int w)
     {
-        var cfg = Config.COMMON;
-        y = addToggle(x, y, w, "omnitrinket.gui.flight.enabled",
-                cfg.flyEnabled::get, cfg.flyEnabled::set, true);
-        y = addToggle(x, y, w, "omnitrinket.gui.flight.noInertia",
-                cfg.flyNoInertia::get, cfg.flyNoInertia::set, true);
-        y = addToggle(x, y, w, "omnitrinket.gui.flight.noMiningSlowdown",
-                cfg.flyNoMiningSlowdown::get, cfg.flyNoMiningSlowdown::set, true);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.flight.enabled",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.FLY_ENABLED),
+                PlayerSettings.FLY_ENABLED);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.flight.noInertia",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.FLY_NO_INERTIA),
+                PlayerSettings.FLY_NO_INERTIA);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.flight.noMiningSlowdown",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.FLY_NO_MINING_SLOWDOWN),
+                PlayerSettings.FLY_NO_MINING_SLOWDOWN);
         y = addPlayerToggle(x, y, w, "omnitrinket.gui.flight.locked",
-                ClientSettingsCache::flyLocked, PlayerSettings.KEY_FLY_LOCKED,
-                PlayerSettings.DEFAULT_FLY_LOCKED);
-        y = addNumber(x, y, w, "omnitrinket.gui.flight.speed",
-                cfg.flySpeedMultiplier::get,
-                v -> cfg.flySpeedMultiplier.set(v),
-                2.0D, 0.1D, 10.0D);
-        addNumber(x, y, w, "omnitrinket.gui.flight.sprintMultiplier",
-                cfg.flySprintMultiplier::get,
-                v -> cfg.flySprintMultiplier.set(v),
-                2.0D, 0.1D, 10.0D);
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.FLY_LOCKED),
+                PlayerSettings.FLY_LOCKED);
+        y = addPlayerNumber(x, y, w, "omnitrinket.gui.flight.speed", PlayerSettings.FLY_SPEED);
+        addPlayerNumber(x, y, w, "omnitrinket.gui.flight.sprintMultiplier", PlayerSettings.FLY_SPRINT);
     }
 
     private void buildSprint(int x, int y, int w)
     {
-        var cfg = Config.COMMON;
-        y = addToggle(x, y, w, "omnitrinket.gui.sprint.enabled",
-                cfg.sprintEnabled::get, cfg.sprintEnabled::set, true);
-        y = addToggle(x, y, w, "omnitrinket.gui.sprint.resumeSprint",
-                cfg.resumeSprintAfterHittingObstacle::get,
-                cfg.resumeSprintAfterHittingObstacle::set, true);
-        y = addNumber(x, y, w, "omnitrinket.gui.sprint.speed",
-                ClientSettingsCache::moveSpeedMultiplier,
-                v ->
-                {
-                    ClientSettingsCache.setLocalDouble(PlayerSettings.KEY_MOVE_SPEED, v);
-                    sendField(PlayerSettings.KEY_MOVE_SPEED, v);
-                },
-                PlayerSettings.DEFAULT_MOVE_SPEED_MULTIPLIER,
-                PlayerSettings.MIN_MOVE_MULTIPLIER, PlayerSettings.MAX_MOVE_MULTIPLIER);
-        y = addNumber(x, y, w, "omnitrinket.gui.sprint.jump",
-                ClientSettingsCache::jumpHeightMultiplier,
-                v ->
-                {
-                    ClientSettingsCache.setLocalDouble(PlayerSettings.KEY_JUMP_HEIGHT, v);
-                    sendField(PlayerSettings.KEY_JUMP_HEIGHT, v);
-                },
-                PlayerSettings.DEFAULT_JUMP_HEIGHT_MULTIPLIER,
-                PlayerSettings.MIN_MOVE_MULTIPLIER, PlayerSettings.MAX_MOVE_MULTIPLIER);
-        addNumber(x, y, w, "omnitrinket.gui.sprint.resumeSprintTicks",
-                () -> cfg.sprintResumeTicks.get(),
-                v -> cfg.sprintResumeTicks.set((int) Math.round(v)),
-                10.0D, 1.0D, 100.0D);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.sprint.enabled",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.SPRINT_ENABLED),
+                PlayerSettings.SPRINT_ENABLED);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.sprint.resumeSprint",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.SPRINT_RESUME),
+                PlayerSettings.SPRINT_RESUME);
+        y = addPlayerNumber(x, y, w, "omnitrinket.gui.sprint.speed", PlayerSettings.MOVE_SPEED);
+        y = addPlayerNumber(x, y, w, "omnitrinket.gui.sprint.jump", PlayerSettings.JUMP_HEIGHT);
+        addPlayerInt(x, y, w, "omnitrinket.gui.sprint.resumeSprintTicks",
+                PlayerSettings.SPRINT_RESUME_TICKS);
     }
 
     private void buildSurvival(int x, int y, int w)
     {
-        var cfg = Config.COMMON;
-        y = addToggle(x, y, w, "omnitrinket.gui.survival.enabled",
-                cfg.survivalEnabled::get, cfg.survivalEnabled::set, true);
-        y = addToggle(x, y, w, "omnitrinket.gui.survival.fullDamageImmunity",
-                cfg.fullDamageImmunity::get, cfg.fullDamageImmunity::set, true);
-        y = addToggle(x, y, w, "omnitrinket.gui.survival.allowVoidDamage",
-                cfg.allowVoidDamage::get, cfg.allowVoidDamage::set, true);
-        y = addToggle(x, y, w, "omnitrinket.gui.survival.noUnderwaterMiningSlowdown",
-                cfg.noUnderwaterMiningSlowdown::get,
-                cfg.noUnderwaterMiningSlowdown::set, true);
-        y = addToggle(x, y, w, "omnitrinket.gui.survival.noOxygenConsumption",
-                cfg.noOxygenConsumption::get, cfg.noOxygenConsumption::set, true);
-        addToggle(x, y, w, "omnitrinket.gui.survival.removeFireOverlay",
-                cfg.removeFireOverlay::get, cfg.removeFireOverlay::set, true);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.survival.enabled",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_ENABLED),
+                PlayerSettings.SURVIVAL_ENABLED);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.survival.fullDamageImmunity",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_NO_DAMAGE),
+                PlayerSettings.SURVIVAL_NO_DAMAGE);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.survival.allowVoidDamage",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_VOID_DAMAGE),
+                PlayerSettings.SURVIVAL_VOID_DAMAGE);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.survival.noUnderwaterMiningSlowdown",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_NO_WATER_MINING),
+                PlayerSettings.SURVIVAL_NO_WATER_MINING);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.survival.noOxygenConsumption",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_NO_OXYGEN),
+                PlayerSettings.SURVIVAL_NO_OXYGEN);
+        addPlayerToggle(x, y, w, "omnitrinket.gui.survival.removeFireOverlay",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_NO_FIRE_OVERLAY),
+                PlayerSettings.SURVIVAL_NO_FIRE_OVERLAY);
     }
 
     private void buildBuff(int x, int y, int w)
     {
-        var cfg = Config.COMMON;
-        y = addToggle(x, y, w, "omnitrinket.gui.buff.enabled",
-                cfg.buffEnabled::get, cfg.buffEnabled::set, true);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.buff.enabled",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.BUFF_ENABLED),
+                PlayerSettings.BUFF_ENABLED);
         y = addPlayerToggle(x, y, w, "omnitrinket.gui.buff.nightVision",
-                ClientSettingsCache::nightVision, PlayerSettings.KEY_NIGHT_VISION,
-                PlayerSettings.DEFAULT_NIGHT_VISION);
-        addNumber(x, y, w, "omnitrinket.gui.buff.reach",
-                cfg.reachDistance::get, cfg.reachDistance::set,
-                15.0D, 0.0D, 100.0D);
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.NIGHT_VISION),
+                PlayerSettings.NIGHT_VISION);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.buff.saturation",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.SATURATION),
+                PlayerSettings.SATURATION);
+        addPlayerNumber(x, y, w, "omnitrinket.gui.buff.reach", PlayerSettings.BUFF_REACH);
     }
 
     private void buildEnvironment(int x, int y, int w)
@@ -524,16 +508,22 @@ public class OmniTrinketSettingsScreen extends Screen
         return y + ROW_H;
     }
 
+    /**
+     * 每玩家开关行。
+     *
+     * <p>点击后先乐观改本地镜像（手感零延迟），再发包让服务端改权威值，
+     * 服务端确认后会回发同步包覆盖。默认值是描述符自带的，调用方不必再传。</p>
+     */
     private int addPlayerToggle(int x, int y, int w, String key,
                                 java.util.function.BooleanSupplier getter,
-                                String settingsKey, boolean defaultValue)
+                                PlayerSettingKey<Boolean> settingsKey)
     {
         int groupW = numberGroupW();
         Button btn = Button.builder(onOff(getter.getAsBoolean()), b ->
                 {
                     commitEditing();
                     boolean next = !getter.getAsBoolean();
-                    ClientSettingsCache.setLocalBoolean(settingsKey, next);
+                    ClientSettingsCache.setBoolean(settingsKey, next);
                     NetworkHandler.CHANNEL.sendToServer(
                             SetPlayerSettingsPacket.ofFlag(settingsKey, next));
                     refreshToggles();
@@ -542,7 +532,8 @@ public class OmniTrinketSettingsScreen extends Screen
                 .build();
         addRenderableWidget(btn);
         rows.add(btn);
-        toggleRows.add(new ToggleRow(btn, getter, null, defaultValue, true, settingsKey));
+        toggleRows.add(new ToggleRow(btn, getter, null,
+                settingsKey.defaultValue(), true, settingsKey));
         labelRows.add(new LabelRow(t(key), x, y + (ROW_CTRL_H - 8) / 2 + 1));
         return y + ROW_H;
     }
@@ -646,11 +637,36 @@ public class OmniTrinketSettingsScreen extends Screen
     // 网络
     // ------------------------------------------------------------------
 
-    private void sendField(String settingsKey, double value)
+    /** 每玩家数值项：先乐观改本地镜像，再发包给服务端 */
+    private void setPlayerDouble(PlayerSettingKey<Double> key, double value)
     {
-        CompoundTag patch = new CompoundTag();
-        patch.putDouble(settingsKey, value);
-        NetworkHandler.CHANNEL.sendToServer(new SetPlayerSettingsPacket(patch));
+        ClientSettingsCache.setDouble(key, value);
+        NetworkHandler.CHANNEL.sendToServer(SetPlayerSettingsPacket.ofDouble(key, value));
+    }
+
+    /** 每玩家整数项：先乐观改本地镜像，再发包给服务端 */
+    private void setPlayerInt(PlayerSettingKey<Integer> key, int value)
+    {
+        ClientSettingsCache.setInt(key, value);
+        NetworkHandler.CHANNEL.sendToServer(SetPlayerSettingsPacket.ofInt(key, value));
+    }
+
+    /** 每玩家整数行（界面仍用数值输入框，写回时取整） */
+    private int addPlayerInt(int x, int y, int w, String key, PlayerSettingKey<Integer> field)
+    {
+        return addNumber(x, y, w, key,
+                () -> ClientSettingsCache.getInt(field),
+                v -> setPlayerInt(field, (int) Math.round(v)),
+                field.defaultValue(), field.min(), field.max());
+    }
+
+    /** 每玩家数值行：取值器 / 写入器 / 默认值 / 上下限全部来自描述符，调用方只给一项 */
+    private int addPlayerNumber(int x, int y, int w, String key, PlayerSettingKey<Double> field)
+    {
+        return addNumber(x, y, w, key,
+                () -> ClientSettingsCache.getDouble(field),
+                v -> setPlayerDouble(field, v),
+                field.defaultValue(), field.min(), field.max());
     }
 
     // ------------------------------------------------------------------
@@ -807,7 +823,7 @@ public class OmniTrinketSettingsScreen extends Screen
                 {
                     if (tr.perPlayer)
                     {
-                        ClientSettingsCache.setLocalBoolean(tr.settingsKey, tr.defaultValue);
+                        ClientSettingsCache.setBoolean(tr.settingsKey, tr.defaultValue);
                         NetworkHandler.CHANNEL.sendToServer(
                                 SetPlayerSettingsPacket.ofFlag(tr.settingsKey, tr.defaultValue));
                     }
@@ -1035,74 +1051,39 @@ public class OmniTrinketSettingsScreen extends Screen
     {
         var cfg = Config.COMMON;
 
-        // 飞行
-        cfg.flyEnabled.set(true);
-        cfg.flyNoInertia.set(true);
-        cfg.flyNoMiningSlowdown.set(true);
-        cfg.flySpeedMultiplier.set(2.0D);
-        cfg.flySprintMultiplier.set(2.0D);
+        // 飞行 / 移动 / 生存 / 增益：**全部**是每玩家项，
+        // 由下面的 allDefaults() 补丁统一负责，这里不用逐个 set。
 
-        // 移动
-        cfg.sprintEnabled.set(true);
-        cfg.resumeSprintAfterHittingObstacle.set(true);
-        cfg.sprintResumeTicks.set(10);
-
-        // 生存
-        cfg.survivalEnabled.set(true);
-        cfg.fullDamageImmunity.set(true);
-        cfg.allowVoidDamage.set(true);
-        cfg.noUnderwaterMiningSlowdown.set(true);
-        cfg.noOxygenConsumption.set(true);
-        cfg.removeFireOverlay.set(true);
-
-        // 增益
-        cfg.buffEnabled.set(true);
-        cfg.reachDistance.set(15.0D);
-
-        // 环境
+        // 环境：唯一的全局配置，仍然是每项手动 set
         cfg.lockWeatherClear.set(false);
         cfg.perpetualDay.set(false);
 
         saveAllConfig();
 
-        // 每玩家选项
-        for (String key : List.of(
-                PlayerSettings.KEY_FLY_LOCKED, PlayerSettings.KEY_NIGHT_VISION))
+        // 每玩家选项：本地镜像逐项恢复默认，再发一个"全部恢复默认"的补丁包。
+        // 表驱动 ⇒ 以后新增设置项会自动包含进来，不用改这里。
+        for (PlayerSettingKey<Boolean> key : PlayerSettings.BOOLEAN_KEYS)
         {
-            boolean def = PlayerSettings.KEY_FLY_LOCKED.equals(key)
-                    ? PlayerSettings.DEFAULT_FLY_LOCKED
-                    : PlayerSettings.DEFAULT_NIGHT_VISION;
-            ClientSettingsCache.setLocalBoolean(key, def);
-            NetworkHandler.CHANNEL.sendToServer(SetPlayerSettingsPacket.ofFlag(key, def));
+            if (key.clientWritable())
+            {
+                ClientSettingsCache.setBoolean(key, key.defaultValue());
+            }
         }
-        ClientSettingsCache.setLocalDouble(PlayerSettings.KEY_MOVE_SPEED,
-                PlayerSettings.DEFAULT_MOVE_SPEED_MULTIPLIER);
-        sendField(PlayerSettings.KEY_MOVE_SPEED, PlayerSettings.DEFAULT_MOVE_SPEED_MULTIPLIER);
-        ClientSettingsCache.setLocalDouble(PlayerSettings.KEY_JUMP_HEIGHT,
-                PlayerSettings.DEFAULT_JUMP_HEIGHT_MULTIPLIER);
-        sendField(PlayerSettings.KEY_JUMP_HEIGHT, PlayerSettings.DEFAULT_JUMP_HEIGHT_MULTIPLIER);
+        for (PlayerSettingKey<Double> key : PlayerSettings.DOUBLE_KEYS)
+        {
+            ClientSettingsCache.setDouble(key, key.defaultValue());
+        }
+        for (PlayerSettingKey<Integer> key : PlayerSettings.INT_KEYS)
+        {
+            ClientSettingsCache.setInt(key, key.defaultValue());
+        }
+        NetworkHandler.CHANNEL.sendToServer(SetPlayerSettingsPacket.allDefaults());
 
         buildContent();
     }
 
     private void saveAllConfig()
     {
-        Config.COMMON.flyEnabled.save();
-        Config.COMMON.flyNoInertia.save();
-        Config.COMMON.flyNoMiningSlowdown.save();
-        Config.COMMON.flySpeedMultiplier.save();
-        Config.COMMON.flySprintMultiplier.save();
-        Config.COMMON.sprintEnabled.save();
-        Config.COMMON.resumeSprintAfterHittingObstacle.save();
-        Config.COMMON.sprintResumeTicks.save();
-        Config.COMMON.survivalEnabled.save();
-        Config.COMMON.fullDamageImmunity.save();
-        Config.COMMON.allowVoidDamage.save();
-        Config.COMMON.noUnderwaterMiningSlowdown.save();
-        Config.COMMON.noOxygenConsumption.save();
-        Config.COMMON.removeFireOverlay.save();
-        Config.COMMON.buffEnabled.save();
-        Config.COMMON.reachDistance.save();
         Config.COMMON.lockWeatherClear.save();
         Config.COMMON.perpetualDay.save();
     }

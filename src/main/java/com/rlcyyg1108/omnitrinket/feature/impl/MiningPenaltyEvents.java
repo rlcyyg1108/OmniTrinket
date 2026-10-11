@@ -1,6 +1,7 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import com.rlcyyg1108.omnitrinket.OmniTrinket;
 import com.rlcyyg1108.omnitrinket.util.TrinketHelper;
 import net.minecraft.world.entity.player.Player;
@@ -73,11 +74,12 @@ public final class MiningPenaltyEvents
         }
 
         // 生存模块：水下挖掘不减速
-        boolean survivalOk = Config.COMMON.survivalEnabled.get()
-                && Config.COMMON.noUnderwaterMiningSlowdown.get();
+        boolean survivalOk = PlayerSettingsAccess.bool(player, PlayerSettings.SURVIVAL_ENABLED)
+                && PlayerSettingsAccess.bool(player, PlayerSettings.SURVIVAL_NO_WATER_MINING);
         // 飞行模块：去除浮空挖掘速度惩罚（水中、飞行、悬空一并覆盖）
-        boolean flightOk = Config.COMMON.flyEnabled.get()
-                && Config.COMMON.flyNoMiningSlowdown.get();
+        // 注意这两项是"每玩家"的，所以要按玩家取值（双端读法见 PlayerSettingsAccess）
+        boolean flightOk = PlayerSettingsAccess.bool(player, PlayerSettings.FLY_ENABLED)
+                && PlayerSettingsAccess.bool(player, PlayerSettings.FLY_NO_MINING_SLOWDOWN);
 
         float speed = event.getNewSpeed();
         boolean changed = false;

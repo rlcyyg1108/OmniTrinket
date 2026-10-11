@@ -1,6 +1,7 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import com.rlcyyg1108.omnitrinket.OmniTrinket;
 import com.rlcyyg1108.omnitrinket.util.TrinketHelper;
 import net.minecraft.tags.DamageTypeTags;
@@ -25,7 +26,8 @@ public class SurvivalEvents
      */
     private static boolean isWearingTrinket(Player player)
     {
-        return Config.COMMON.survivalEnabled.get() && TrinketHelper.isEquipped(player);
+        return PlayerSettingsAccess.bool(player, PlayerSettings.SURVIVAL_ENABLED)
+                && TrinketHelper.isEquipped(player);
     }
 
     /**
@@ -35,7 +37,7 @@ public class SurvivalEvents
      */
     private static boolean shouldImmune(Player player, DamageSource source)
     {
-        if (!Config.COMMON.fullDamageImmunity.get())
+        if (!PlayerSettingsAccess.bool(player, PlayerSettings.SURVIVAL_NO_DAMAGE))
         {
             return false;
         }
@@ -44,7 +46,7 @@ public class SurvivalEvents
             return false;
         }
         // 虚空伤害例外：配置允许时放行，避免掉进虚空后永远无法脱身
-        if (Config.COMMON.allowVoidDamage.get()
+        if (PlayerSettingsAccess.bool(player, PlayerSettings.SURVIVAL_VOID_DAMAGE)
                 && source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
         {
             return false;

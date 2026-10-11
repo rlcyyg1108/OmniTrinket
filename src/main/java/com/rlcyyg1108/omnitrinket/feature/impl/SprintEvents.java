@@ -1,8 +1,8 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
 import com.rlcyyg1108.omnitrinket.OmniTrinket;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
 import com.rlcyyg1108.omnitrinket.util.TrinketHelper;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -90,10 +90,11 @@ public final class SprintEvents
      */
     public static void tick(Player player)
     {
-        boolean active = Config.COMMON.sprintEnabled.get() && TrinketHelper.isEquipped(player);
-        // 倍率存在服务端的 PlayerSettings 里（双端读法见 MoveSettings）
-        double factor = active ? MoveSettings.moveSpeedMultiplier(player) : 1.0D;
-        if (factor < PlayerSettings.MIN_MOVE_MULTIPLIER)
+        boolean active = PlayerSettingsAccess.bool(player, PlayerSettings.SPRINT_ENABLED)
+                && TrinketHelper.isEquipped(player);
+        // 倍率是每玩家值：服务端读 capability，客户端读本机镜像（见 PlayerSettingsAccess）
+        double factor = active ? PlayerSettingsAccess.dbl(player, PlayerSettings.MOVE_SPEED) : 1.0D;
+        if (factor < PlayerSettings.MIN_MULTIPLIER)
         {
             factor = 1.0D;
         }

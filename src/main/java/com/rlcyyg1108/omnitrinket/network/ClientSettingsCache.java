@@ -1,6 +1,6 @@
 package com.rlcyyg1108.omnitrinket.network;
 
-import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingKey;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -8,16 +8,16 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 /**
  * 客户端侧的玩家设置镜像。
  *
- * <p>HUD、设置界面都是纯客户端的，但锁定飞行 / 夜视开关 / 移速倍率 / 跳跃倍率
- * 存在服务端 Capability 里，因此服务端每次改动都会通过
- * {@link SyncPlayerSettingsPacket} 下发一份，存在这里供渲染与界面直接读取。</p>
+ * <p>HUD、设置界面都是纯客户端的，但每玩家设置存在服务端 Capability 里，
+ * 因此服务端每次改动都会通过 {@link SyncPlayerSettingsPacket} 下发一份，
+ * 存在这里供渲染与界面直接读取。</p>
  *
- * <p>飞行<b>速度</b>本身已经不走这里了（它直接写进原版 {@code Abilities.flyingSpeed}，
- * 由原版包同步）；这个镜像现在只承载"纯自定义"的那几个字段。</p>
+ * <p>取值一律走 {@link PlayerSettingKey} 描述符：<b>镜像里没有的键自动回落到
+ * 描述符的默认值</b>，所以"同步包还没到"这件事天然是安全的。</p>
  *
- * <p>{@link #setLocalBoolean} / {@link #setLocalDouble} 用于界面上的"乐观更新"：
- * 点一下开关立刻改本地镜像，手感零延迟；随后服务端的同步包会覆盖成权威值。
- * 键名统一用 {@link PlayerSettings#KEY_*}，所以覆盖是自然发生的。</p>
+ * <p>{@link #setBoolean} / {@link #setDouble} / {@link #setInt} 用于界面上的
+ * "乐观更新"：点一下立刻改本地镜像，手感零延迟；随后服务端的同步包会覆盖成权威值。
+ * 键名与描述符一致，所以覆盖是自然发生的。</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class ClientSettingsCache
@@ -48,47 +48,41 @@ public final class ClientSettingsCache
         DATA.getAllKeys().clear();
     }
 
-    /** 本地乐观写入：不等服务端回包就先改掉镜像 */
-    public static void setLocalBoolean(String key, boolean value)
+    // ------------------------------------------------------------------
+    // 读取（表驱动，缺键回落默认值）
+    // ------------------------------------------------------------------
+
+    public static boolean getBoolean(PlayerSettingKey<Boolean> key)
     {
-        DATA.putBoolean(key, value);
+        return DATA.contains(key.nbtKey()) ? DATA.getBoolean(key.nbtKey()) : key.defaultValue();
     }
 
-    /** 本地乐观写入：不等服务端回包就先改掉镜像 */
-    public static void setLocalDouble(String key, double value)
+    public static double getDouble(PlayerSettingKey<Double> key)
     {
-        DATA.putDouble(key, value);
+        return DATA.contains(key.nbtKey()) ? DATA.getDouble(key.nbtKey()) : key.defaultValue();
     }
 
-    /** 锁定飞行开关 */
-    public static boolean flyLocked()
+    public static int getInt(PlayerSettingKey<Integer> key)
     {
-        return DATA.contains(PlayerSettings.KEY_FLY_LOCKED)
-                ? DATA.getBoolean(PlayerSettings.KEY_FLY_LOCKED)
-                : PlayerSettings.DEFAULT_FLY_LOCKED;
+        return DATA.contains(key.nbtKey()) ? DATA.getInt(key.nbtKey()) : key.defaultValue();
     }
 
-    /** 夜视开关 */
-    public static boolean nightVision()
+    // ------------------------------------------------------------------
+    // 本地乐观写入（不等服务端回包就先改掉镜像）
+    // ------------------------------------------------------------------
+
+    public static void setBoolean(PlayerSettingKey<Boolean> key, boolean value)
     {
-        return DATA.contains(PlayerSettings.KEY_NIGHT_VISION)
-                ? DATA.getBoolean(PlayerSettings.KEY_NIGHT_VISION)
-                : PlayerSettings.DEFAULT_NIGHT_VISION;
+        DATA.putBoolean(key.nbtKey(), value);
     }
 
-    /** 跳跃高度倍率（跳跃高度 = 原版 × 该值） */
-    public static double jumpHeightMultiplier()
+    public static void setDouble(PlayerSettingKey<Double> key, double value)
     {
-        return DATA.contains(PlayerSettings.KEY_JUMP_HEIGHT)
-                ? DATA.getDouble(PlayerSettings.KEY_JUMP_HEIGHT)
-                : PlayerSettings.DEFAULT_JUMP_HEIGHT_MULTIPLIER;
+        DATA.putDouble(key.nbtKey(), value);
     }
 
-    /** 移动速度倍率（走路 / 奔跑速度 = 原版 × 该值） */
-    public static double moveSpeedMultiplier()
+    public static void setInt(PlayerSettingKey<Integer> key, int value)
     {
-        return DATA.contains(PlayerSettings.KEY_MOVE_SPEED)
-                ? DATA.getDouble(PlayerSettings.KEY_MOVE_SPEED)
-                : PlayerSettings.DEFAULT_MOVE_SPEED_MULTIPLIER;
+        DATA.putInt(key.nbtKey(), value);
     }
 }

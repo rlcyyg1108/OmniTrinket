@@ -1,7 +1,8 @@
 package com.rlcyyg1108.omnitrinket.network;
 
-import com.rlcyyg1108.omnitrinket.Config;
 import com.rlcyyg1108.omnitrinket.feature.impl.FlightSpeeds;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsHelper;
 import com.rlcyyg1108.omnitrinket.util.TrinketHelper;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -12,13 +13,14 @@ import java.util.function.Supplier;
 /**
  * 客户端 -&gt; 服务端的按键操作包。
  *
- * <p>飞行速度存在服务端的全局配置里，客户端按 X 时只能发个请求，
- * 由服务端实际修改配置并写入 {@code Abilities.flyingSpeed}
+ * <p>飞行速度存在<b>每玩家</b>的 {@code PlayerSettings.FLY_SPEED} 里，客户端按 X 时
+ * 只能发个请求，由服务端修改该玩家自己的设置并回发同步包；数值本身由
+ * {@code FlightEvents} 每 tick 写进 {@code Abilities.flyingSpeed}
  * （再靠原版 abilities 包同步回客户端）。</p>
  */
 public class KeyActionPacket
 {
-    /** 切换飞行速度档位（改 flySpeedMultiplier，1/2/3/5/10 循环） */
+    /** 切换飞行速度档位（改自己的 {@code PlayerSettings.FLY_SPEED}，1/2/3/5/10 循环） */
     public static final int ACTION_CYCLE_FLY_SPEED = 0;
 
     private final int action;
@@ -59,17 +61,23 @@ public class KeyActionPacket
         {
             return;
         }
+        PlayerSettings settings = PlayerSettingsHelper.get(player).orElse(null);
+        if (settings == null)
+        {
+            return;
+        }
 
         switch (action)
         {
-            // X 键：在 1/2/3/5/10 倍之间循环，改的是"飞行速度"这一个值。
-            // 值本身由 FlightEvents 每 tick 写进 Abilities.flyingSpeed，
-            // 所以这里改完配置就够了，不需要额外的下行同步。
+            // X 键：在 1/2/3/5/10 倍之间循环，改的是"自己"的飞行速度倍率。
+            // 值本身由 FlightEvents 每 tick 写进 Abilities.flyingSpeed；
+            // 这里再回发一次同步包，让客户端的 HUD 立刻拿到权威值。
             case ACTION_CYCLE_FLY_SPEED ->
             {
-                double next = FlightSpeeds.next(Config.COMMON.flySpeedMultiplier.get());
-                Config.COMMON.flySpeedMultiplier.set(next);
-                Config.COMMON.flySpeedMultiplier.save();
+                double next = FlightSpeeds.next(settings.getDouble(PlayerSettings.FLY_SPEED));
+                settings.setDouble(PlayerSettings.FLY_SPEED, next);
+                settings.setDirty(true);
+                SyncPlayerSettingsPacket.sendTo(player);
             }
             default ->
             {

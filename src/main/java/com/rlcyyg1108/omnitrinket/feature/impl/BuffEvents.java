@@ -1,6 +1,6 @@
 package com.rlcyyg1108.omnitrinket.feature.impl;
 
-import com.rlcyyg1108.omnitrinket.Config;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
 import com.rlcyyg1108.omnitrinket.OmniTrinket;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsHelper;
@@ -21,22 +21,25 @@ import java.util.UUID;
 /**
  * 增益模块的运行时驱动。
  *
- * <h3>1. 夜视：用药水效果实现</h3>
- * <p>早先走的是客户端 Mixin 篡改 {@code LightTexture} 读取的伽马值。这条路修了三轮都不成：
+ * <h3>1. 夜视 / 饱和：用药水效果实现（同一套写法）</h3>
+ * <p>夜视早先走的是客户端 Mixin 篡改 {@code LightTexture} 读取的伽马值。这条路修了三轮都不成：
  * {@code updateLightTexture} 又长又没有局部变量表，{@code @ModifyVariable} 的 ordinal
  * 根本不可靠，Forge 打补丁后方法体偏移又和原版对不上。**实现方式本身就是错的。**</p>
  *
- * <p>现在直接挂原版夜视效果（服务端权威、原版包自动同步）：</p>
- * <pre>
- *   每 100 tick（5 秒）给一次 mob_effects.night_vision，持续 400 tick（20 秒）
- * </pre>
- * <p><b>为什么是 20 秒而不是 15 秒：</b>原版在效果剩余时间不足 200 tick（10 秒）时，
+ * <p>现在两者都是直接挂原版效果（服务端权威、原版包自动同步）：
+ * 每 100 tick（5 秒）续一次 400 tick（20 秒），参数统一是
+ * {@code ambient=false, visible=false, showIcon=false}：不产生粒子、不占 HUD 图标。</p>
+ *
+ * <p><b>夜视为什么是 20 秒而不是 15 秒：</b>原版在效果剩余时间不足 200 tick（10 秒）时，
  * 亮度会切换到 {@code 0.7 + sin(...)·0.3} 的闪烁公式（40%~100% 之间抖）。
  * 若时长取 15 秒、每 5 秒补一次，剩余时间就在 {@code 300 ↔ 200} 之间锯齿，
  * <b>谷底正好压在那条 200 的线上</b>；客户端与服务端只要差 1 tick 就会掉进闪烁区，
  * 看起来就是"黑屏一下"。取 20 秒则谷底是 300，离阈值有 100 tick 余量，永远不会闪。</p>
  *
- * <p>参数 {@code ambient=false, visible=false, showIcon=false}：不产生粒子、不占 HUD 图标。</p>
+ * <p><b>饱和为什么同样有效：</b>原版饱和是"瞬时效果"（{@code InstantenousMobEffect}），
+ * 放进效果列表后每个 tick 都会命中 {@code MobEffect.applyEffectTick} 的 SATURATION 分支
+ * （服务端执行 {@code FoodData.eat(amplifier + 1, 1.0F)}），
+ * 所以只要效果常驻，佩戴期间的饱食度就是满的。</p>
  *
  * <h3>2. 触及范围：改成每 tick 驱动</h3>
  * <p>早先写在 Curios 的 {@code ICurioItem#getAttributeModifiers()} 里 ——
@@ -47,10 +50,10 @@ import java.util.UUID;
 @Mod.EventBusSubscriber(modid = OmniTrinket.MODID)
 public final class BuffEvents
 {
-    /** 给药间隔（tick）：100 = 5 秒 */
-    private static final int NIGHT_VISION_INTERVAL_TICKS = 100;
-    /** 每次给的持续时间（tick）：400 = 20 秒（必须让剩余时间始终 &gt; 200，见类注释） */
-    private static final int NIGHT_VISION_DURATION_TICKS = 400;
+    /** 隐藏增益的续期间隔（tick）：100 = 5 秒 */
+    private static final int BUFF_REFRESH_INTERVAL_TICKS = 100;
+    /** 每次续期的效果时长（tick）：400 = 20 秒（夜视必须让剩余时间始终 &gt; 200，见类注释） */
+    private static final int BUFF_DURATION_TICKS = 400;
 
     /** 方块触及修饰符 UUID */
     private static final UUID BLOCK_REACH_UUID =
@@ -79,25 +82,26 @@ public final class BuffEvents
             tickReach(player);
         }
 
-        // 夜视：效果由服务端权威施加，客户端只负责接收
+        // 夜视 / 饱和：效果由服务端权威施加，客户端只负责接收
         if (!player.level().isClientSide())
         {
             tickNightVision(player);
+            tickSaturation(player);
         }
     }
 
     // ------------------------------------------------------------------
-    // 夜视
+    // 夜视 / 饱和（同一套写法：隐藏效果定期续期）
     // ------------------------------------------------------------------
 
     private static void tickNightVision(Player player)
     {
-        if (!Config.COMMON.buffEnabled.get())
+        if (!PlayerSettingsAccess.bool(player, PlayerSettings.BUFF_ENABLED))
         {
             return;
         }
         PlayerSettings settings = PlayerSettingsHelper.get(player).orElse(null);
-        if (settings == null || !settings.isNightVision())
+        if (settings == null || !settings.getBoolean(PlayerSettings.NIGHT_VISION))
         {
             return;
         }
@@ -105,13 +109,46 @@ public final class BuffEvents
         {
             return;
         }
-        if (player.tickCount % NIGHT_VISION_INTERVAL_TICKS != 0)
+        if (player.tickCount % BUFF_REFRESH_INTERVAL_TICKS != 0)
         {
             return;
         }
 
         player.addEffect(new MobEffectInstance(
-                MobEffects.NIGHT_VISION, NIGHT_VISION_DURATION_TICKS, 0,
+                MobEffects.NIGHT_VISION, BUFF_DURATION_TICKS, 0,
+                false,  // ambient
+                false,  // visible —— 不要粒子
+                false   // showIcon —— 不占 HUD 图标
+        ));
+    }
+
+    /**
+     * 饱和：与夜视完全同一套写法（每 5 秒续一次 20 秒的隐藏效果）。
+     *
+     * <p>效果常驻即等价于"饱食度常满"——原因见类注释里"饱和为什么同样有效"。</p>
+     */
+    private static void tickSaturation(Player player)
+    {
+        if (!PlayerSettingsAccess.bool(player, PlayerSettings.BUFF_ENABLED))
+        {
+            return;
+        }
+        PlayerSettings settings = PlayerSettingsHelper.get(player).orElse(null);
+        if (settings == null || !settings.getBoolean(PlayerSettings.SATURATION))
+        {
+            return;
+        }
+        if (!TrinketHelper.isEquipped(player))
+        {
+            return;
+        }
+        if (player.tickCount % BUFF_REFRESH_INTERVAL_TICKS != 0)
+        {
+            return;
+        }
+
+        player.addEffect(new MobEffectInstance(
+                MobEffects.SATURATION, BUFF_DURATION_TICKS, 0,
                 false,  // ambient
                 false,  // visible —— 不要粒子
                 false   // showIcon —— 不占 HUD 图标
@@ -124,8 +161,9 @@ public final class BuffEvents
 
     private static void tickReach(Player player)
     {
-        boolean active = Config.COMMON.buffEnabled.get() && TrinketHelper.isEquipped(player);
-        double target = Config.COMMON.reachDistance.get();
+        boolean active = PlayerSettingsAccess.bool(player, PlayerSettings.BUFF_ENABLED)
+                && TrinketHelper.isEquipped(player);
+        double target = PlayerSettingsAccess.dbl(player, PlayerSettings.BUFF_REACH);
 
         // Forge 的 BLOCK_REACH / ENTITY_REACH 本身带有原版默认值（方块 4.5、实体 3.0），
         // 配置值语义是"最终总格数"，所以修饰符增量 = 配置值 - 原版默认值。

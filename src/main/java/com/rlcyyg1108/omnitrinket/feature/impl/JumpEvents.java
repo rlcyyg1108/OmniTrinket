@@ -2,6 +2,8 @@ package com.rlcyyg1108.omnitrinket.feature.impl;
 
 import com.rlcyyg1108.omnitrinket.Config;
 import com.rlcyyg1108.omnitrinket.OmniTrinket;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
+import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
 import com.rlcyyg1108.omnitrinket.util.TrinketHelper;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -56,7 +58,7 @@ public final class JumpEvents
         {
             return;
         }
-        if (!Config.COMMON.sprintEnabled.get())
+        if (!PlayerSettingsAccess.bool(player, PlayerSettings.SPRINT_ENABLED))
         {
             return;
         }
@@ -65,7 +67,8 @@ public final class JumpEvents
             return;
         }
 
-        double heightMultiplier = MoveSettings.jumpHeightMultiplier(player);
+        // 每玩家值：服务端读 capability，客户端读本机镜像（见 PlayerSettingsAccess）
+        double heightMultiplier = PlayerSettingsAccess.dbl(player, PlayerSettings.JUMP_HEIGHT);
         if (heightMultiplier <= 1.0D)
         {
             return;
