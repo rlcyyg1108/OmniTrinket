@@ -18,3 +18,26 @@
 | 生存 | 完全免伤、允许虚空伤害、水下挖掘不减速、不消耗氧气、去除着火屏幕特效 |
 | 增益 | 夜视、饱和、触及范围 |
 | 环境 | 锁定晴天、终日为白|
+
+***
+
+# Omni Trinket
+
+Added a multi-functional trinket for personal use.  
+All features can be toggled in the settings UI.  
+The trinket has no recipe by default; you may add one yourself if needed.  
+
+Not heavily tested in multiplayer, functionality is not guaranteed.  
+
+**Supported Minecraft versions**: 1.20.1 Forge  
+**Required dependency**: Curios API (5.14.1+)  
+
+## Feature List
+
+| Module | Content |
+| --- | --- |
+| Flight | Double-jump to toggle flight; no inertia; flight lock; 5 speed levels (1/2/3/5/10) |
+| Movement | Movement speed / jump multiplier; dash recovery after hitting walls |
+| Survival | Full damage immunity; void damage toggle; no mining slowdown underwater; no oxygen consumption; remove fire overlay |
+| Buffs | Night vision, saturation, reach range |
+| World | Lock clear weather; permanent daylight |
