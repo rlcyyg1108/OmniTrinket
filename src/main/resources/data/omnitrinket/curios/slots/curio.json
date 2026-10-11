@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "size": 1,
+  "operation": "SET",
+  "order": 20,
+  "icon": "curios:slot/empty_curio_slot",
+  "add_cosmetic": false,
+  "use_native_gui": true,
+  "render_toggle": true,
+  "drop_rule": "DEFAULT",
+  "validators": [
+    "curios:tag"
+  ]
+}

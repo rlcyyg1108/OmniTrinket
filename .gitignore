@@ -1,0 +1,42 @@
+# ===== 构建产物 / 运行目录（体积大，不追踪）=====
+build/
+out/
+run/
+run-data/
+logs/
+暂存箱.txt
+备份/
+参考资料/
+
+# ===== Gradle =====
+.gradle/
+
+# ===== IDE =====
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+eclipse/
+bin/
+.settings/
+.metadata/
+.classpath
+.project
+*.launch
+
+# VS Code
+.vscode/
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 其他 =====
+*.log
+*.tmp
+# Forge MDK 自动生成
+forge*changelog.txt
