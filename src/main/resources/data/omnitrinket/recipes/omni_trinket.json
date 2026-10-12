@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "D": {
+      "item": "minecraft:dirt"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "DI ",
+    "   ",
+    "DDD"
+  ],
+  "result": {
+    "item": "omnitrinket:omni_trinket"
+  },
+  "show_notification": true
+}

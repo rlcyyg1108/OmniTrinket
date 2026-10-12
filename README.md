@@ -2,7 +2,6 @@
 
 添加了一件面向个人使用的多功能饰品  
 所有功能均可在设置ui内开关  
-饰品默认无配方，需要可自行添加  
 
 未进行过多人模式测试，不保证可以正常使用  
 
@@ -25,7 +24,6 @@
 
 Added a multi-functional trinket for personal use.  
 All features can be toggled in the settings UI.  
-The trinket has no recipe by default; you may add one yourself if needed.  
 
 Not heavily tested in multiplayer, functionality is not guaranteed.  
 
