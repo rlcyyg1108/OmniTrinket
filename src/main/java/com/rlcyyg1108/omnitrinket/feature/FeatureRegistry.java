@@ -32,17 +32,20 @@ public final class FeatureRegistry
         }
         initialized = true;
 
-        // 生存模块：完全免伤 / 水下挖掘不减速 / 水下不消耗氧气 / 去掉屏幕火焰动画
-        register(new com.rlcyyg1108.omnitrinket.feature.impl.SurvivalFeature());
+        // 注册顺序 = tooltip 展示顺序，必须与设置 UI 侧边栏
+        // （飞行 / 移动 / 生存 / 增益 / 环境）保持一致。
+
+        // 飞行模块：自带飞行 / 无惯性 / 飞行速度倍率（档位）/ 锁定飞行 / 去除浮空挖掘速度惩罚
+        register(new com.rlcyyg1108.omnitrinket.feature.impl.FlightFeature());
 
         // 移动模块：行走加速 / 跳跃增高（倍率为每玩家的 PlayerSettings 字段）
         register(new com.rlcyyg1108.omnitrinket.feature.impl.SprintFeature());
 
+        // 生存模块：完全免伤 / 水下挖掘不减速 / 水下不消耗氧气 / 去掉屏幕火焰动画
+        register(new com.rlcyyg1108.omnitrinket.feature.impl.SurvivalFeature());
+
         // Buff 模块：夜视（药水效果） / 触及范围
         register(new com.rlcyyg1108.omnitrinket.feature.impl.BuffFeature());
-
-        // 飞行模块：自带飞行 / 无惯性 / 飞行速度倍率（档位）/ 锁定飞行 / 去除浮空挖掘速度惩罚
-        register(new com.rlcyyg1108.omnitrinket.feature.impl.FlightFeature());
 
         // 环境模块：晴天锁定 / 终日为白
         register(new com.rlcyyg1108.omnitrinket.feature.impl.EnvironmentFeature());

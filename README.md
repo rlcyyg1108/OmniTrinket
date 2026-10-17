@@ -2,7 +2,6 @@
 
 添加了一件面向个人使用的多功能饰品  
 所有功能均可在设置ui内开关  
-
 未进行过多人模式测试，不保证可以正常使用  
 
 **目前支持的 Minecraft 版本**：1.20.1 forge  
@@ -12,9 +11,9 @@
 
 | 模块 | 内容 |
 | --- | --- |
-| 飞行 | 双击跳跃开关飞行、无惯性、锁定飞行、五档速度档位（1/2/3/5/10） |
+| 飞行 | 双击跳跃开关飞行、无惯性、锁定飞行、去除浮空挖掘减速、五档速度档位（1/2/3/5/10） |
 | 移动 | 移速 / 跳跃倍率、撞墙后恢复冲刺 |
-| 生存 | 完全免伤、允许虚空伤害、水下挖掘不减速、不消耗氧气、去除着火屏幕特效 |
+| 生存 | 完全免伤、允许虚空伤害、去除水下挖掘减速、不消耗氧气、去除着火屏幕特效 |
 | 增益 | 夜视、饱和、触及范围 |
 | 环境 | 锁定晴天、终日为白|
 
@@ -24,7 +23,6 @@
 
 Added a multi-functional trinket for personal use.  
 All features can be toggled in the settings UI.  
-
 Not heavily tested in multiplayer, functionality is not guaranteed.  
 
 **Supported Minecraft versions**: 1.20.1 Forge  

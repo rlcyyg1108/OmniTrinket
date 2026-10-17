@@ -7,7 +7,9 @@ logs/
 暂存箱.txt
 备份/
 参考资料/
-
+VIBE_CODING_GUIDE.md
+.workbuddy/
+.codebuddy/
 # ===== Gradle =====
 .gradle/
 

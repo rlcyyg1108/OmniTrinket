@@ -5,7 +5,11 @@ plugins {
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
 }
 
-version = mod_version
+// Jar 文件名格式：<mod_id>-<mod_version>-<minecraft_version>-forge
+// 例：omnitrinket-0.0.2-1.20.1-forge.jar
+// 注意：mods.toml 里的 version 仍取 mod_version（0.0.2），
+// 所以游戏内显示的版本号不受这里影响。
+version = "${mod_version}-${minecraft_version}-forge"
 group = mod_group_id
 
 base {

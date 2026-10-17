@@ -1,5 +1,6 @@
 package com.rlcyyg1108.omnitrinket.client.gui;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import com.rlcyyg1108.omnitrinket.Config;
 import com.rlcyyg1108.omnitrinket.client.KeyBindings;
 import com.rlcyyg1108.omnitrinket.network.ClientSettingsCache;
@@ -8,6 +9,7 @@ import com.rlcyyg1108.omnitrinket.network.SetPlayerSettingsPacket;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettingKey;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -16,7 +18,10 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.Resource;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,7 +32,7 @@ import java.util.Map;
  *
  * <h3>外观：原版容器风格</h3>
  * <pre>
- * ┌──────────────────────────────────────────┐ ← 1px 黑描边 + 白色高光（上/左）
+ * ┌──────────────────────────────────────────┐ ← 原版 inventory.png 九宫格（黑边 + 高光/阴影）
  * │            全能饰品 - 设置 UI             │ ← 标题居中
  * │ ┌────────┐  ┌──────────────────────────┐ │
  * │ │  飞行   │  │ 启用飞行             开  │ │
@@ -37,8 +42,11 @@ import java.util.Map;
  * │ │  环境   │  │                          │ │
  * │ └────────┘  └──────────────────────────┘ │
  * │ [重置全部]  (红框)    [      完成      ]  │
- * └──────────────────────────────────────────┘ ← 1px 深灰阴影（下/右）
+ * └──────────────────────────────────────────┘ ← 原版 inventory.png 九宫格（阴影）
  * </pre>
+ *
+ * <p>面板底板取自原版 {@code inventory.png} 的九宫格；直接绘制在面板上的文字颜色
+ * 按面板亮度自动选择：浅色面板用深灰、深色面板用白色 + 阴影，保证两种材质包下都可读。</p>
  *
  * <h3>尺寸</h3>
  * <p>面板采用<b>固定尺寸</b>（按最大分类的行数预留），保证侧边栏 5 个分类按钮
@@ -95,15 +103,34 @@ public class OmniTrinketSettingsScreen extends Screen
      */
     private static final int MAX_ROWS = 6;
 
+    // ---- 面板贴图（原版容器 GUI，材质包可覆盖）----
+    /**
+     * 原版容器面板贴图。
+     *
+     * <p>材质包替换 {@code minecraft:textures/gui/container/inventory.png} 后，
+     * 本界面的面板会一起变化 —— 这是"跟随材质包"的关键。</p>
+     */
+    private static final ResourceLocation PANEL_TEXTURE =
+            ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/container/inventory.png");
+    /** 原版 GUI 图集边长（{@code blit} 的 textureWidth / textureHeight） */
+    private static final int PANEL_TEXTURE_SIZE = 256;
+    /** 原版面板在 inventory.png 中的宽高 */
+    private static final int VANILLA_PANEL_WIDTH = 176;
+    private static final int VANILLA_PANEL_HEIGHT = 166;
+    /** 九宫格边宽：4px 覆盖原版黑边 + 高光 / 阴影 */
+    private static final int PANEL_BORDER = 4;
+
     // ---- 颜色（原版容器 GUI 标准配色）----
-    /** 面板外描边：1px 黑 */
-    private static final int COLOR_OUTLINE = 0xFF000000;
-    /** 面板底色：原版容器那种浅灰 */
-    private static final int COLOR_PANEL = 0xFFC6C6C6;
+    /** 滚动条滑块高光（面板已改用原版贴图，这里只服务滚动条） */
     private static final int COLOR_HIGHLIGHT = 0xFFFFFFFF;
+    /** 滚动条滑块阴影（面板已改用原版贴图，这里只服务滚动条） */
     private static final int COLOR_SHADOW = 0xFF555555;
-    /** 直接画在面板上的文字（名称/标题/提示）：深灰，不加深色阴影 */
-    private static final int COLOR_TEXT = 0x404040;
+    /** 浅色面板上的文字：深灰（原版容器配色） */
+    private static final int COLOR_TEXT_ON_LIGHT = 0x404040;
+    /** 深色面板上的文字：白色 */
+    private static final int COLOR_TEXT_ON_DARK = 0xFFFFFF;
+    /** 面板亮度阈值：高于它视为浅色面板（0~1） */
+    private static final double LIGHT_PANEL_LUMINANCE = 0.55D;
     private static final int COLOR_SCROLL_TRACK = 0xFF8B8B8B;
     private static final int COLOR_SCROLL_THUMB = 0xFFFFFFFF;
     private static final int COLOR_DIVIDER = 0xFF8B8B8B;
@@ -115,7 +142,14 @@ public class OmniTrinketSettingsScreen extends Screen
             Component.translatable("omnitrinket.gui.category.buff"),
             Component.translatable("omnitrinket.gui.category.environment"));
 
+    /** 上次停留的分类；关闭界面再打开时恢复（仅本次游戏会话） */
+    private static int lastCategory = 0;
+
     private int currentCategory = 0;
+
+    /** 当前面板底色对应的文字颜色与阴影（init 时按材质包贴图计算） */
+    private int textColor = COLOR_TEXT_ON_LIGHT;
+    private boolean textShadow = false;
 
     private int panelLeft;
     private int panelTop;
@@ -249,6 +283,8 @@ public class OmniTrinketSettingsScreen extends Screen
     public OmniTrinketSettingsScreen()
     {
         super(Component.translatable("omnitrinket.gui.title"));
+        // 恢复上次停留的分类；列表长度变化时夹紧，避免越界
+        currentCategory = Math.max(0, Math.min(CATEGORIES.size() - 1, lastCategory));
     }
 
     private Component t(String key)
@@ -269,6 +305,9 @@ public class OmniTrinketSettingsScreen extends Screen
     @Override
     protected void init()
     {
+        // 按当前材质包的面板底色决定文字颜色（浅色黑字 / 深色白字）
+        resolveTextColor();
+
         // 固定面板尺寸（按最大行数预留），保证侧边栏永不溢出
         int w = Math.max(280, Math.min(this.width - 2 * MARGIN, PANEL_W));
         int neededH = TITLE_H + MAX_ROWS * ROW_H + PAD + FOOTER_H;
@@ -285,6 +324,89 @@ public class OmniTrinketSettingsScreen extends Screen
 
         buildSidebar();
         buildContent();
+    }
+
+    /**
+     * 按当前材质包的面板底色选择文字颜色。
+     *
+     * <p>材质包可以替换 {@code inventory.png} 的填充色：原版是浅灰，深色包是深灰/黑。
+     * 这里读取面板填充区的第一个不透明像素并算亮度：浅色面板用深灰字、不加深色阴影；
+     * 深色面板用白字 + 深色阴影。于是同一套界面在浅色/深色材质包下都可读。</p>
+     *
+     * <p>读不到贴图（或采样点全透明）时回退到浅色面板的深灰字。</p>
+     */
+    private void resolveTextColor()
+    {
+        int pixel = samplePanelFillPixel();
+        if (pixel == 0)
+        {
+            textColor = COLOR_TEXT_ON_LIGHT;
+            textShadow = false;
+            return;
+        }
+
+        // NativeImage 的像素是 ABGR；这里取低 3 字节算亮度，通道顺序对灰色面板无影响
+        int c0 = pixel & 0xFF;
+        int c1 = (pixel >> 8) & 0xFF;
+        int c2 = (pixel >> 16) & 0xFF;
+        double luminance = (0.299D * c0 + 0.587D * c1 + 0.114D * c2) / 255.0D;
+
+        boolean light = luminance > LIGHT_PANEL_LUMINANCE;
+        textColor = light ? COLOR_TEXT_ON_LIGHT : COLOR_TEXT_ON_DARK;
+        textShadow = !light;
+    }
+
+    /**
+     * 从当前 {@link #PANEL_TEXTURE} 的填充区取一个不透明像素（ABGR）。
+     *
+     * <p>采样点沿左上角对角线从 4px 开始，跳过原版圆角的透明像素；遇到不透明像素即采用。
+     * 读不到资源或解码失败时返回 0，由调用方回退。</p>
+     */
+    private static int samplePanelFillPixel()
+    {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null)
+        {
+            return 0;
+        }
+
+        // 1.20.1 的 ResourceManager#getResource 返回 Optional<Resource>
+        var optional = mc.getResourceManager().getResource(PANEL_TEXTURE);
+        if (optional.isEmpty())
+        {
+            return 0;
+        }
+
+        Resource resource = optional.get();
+        try (var stream = resource.open())
+        {
+            NativeImage image = NativeImage.read(stream);
+            try
+            {
+                int[] samples = {PANEL_BORDER, PANEL_BORDER * 2, PANEL_BORDER * 4, PANEL_BORDER * 8};
+                for (int offset : samples)
+                {
+                    if (offset >= image.getWidth() || offset >= image.getHeight())
+                    {
+                        break;
+                    }
+                    int pixel = image.getPixelRGBA(offset, offset);
+                    if (((pixel >> 24) & 0xFF) >= 128)
+                    {
+                        return pixel;
+                    }
+                }
+            }
+            finally
+            {
+                image.close();
+            }
+        }
+        catch (IOException | RuntimeException ignored)
+        {
+            // 资源读取或图片解码失败：回退浅色面板配色
+        }
+        return 0;
     }
 
     private void buildSidebar()
@@ -305,6 +427,7 @@ public class OmniTrinketSettingsScreen extends Screen
                 {
                     commitEditing();
                     currentCategory = index;
+                    lastCategory = index;
                     buildContent();
                 }
             }).bounds(panelLeft + 6, y, SIDEBAR_W - 12, ROW_CTRL_H).build();
@@ -954,7 +1077,7 @@ public class OmniTrinketSettingsScreen extends Screen
             int ly = lr.baseY + scrollOffset;
             if (ly + 8 >= contentTop && ly <= contentBottom)
             {
-                graphics.drawString(this.font, lr.text, lr.x, ly, COLOR_TEXT, false);
+                graphics.drawString(this.font, lr.text, lr.x, ly, textColor, textShadow);
             }
         }
 
@@ -963,7 +1086,7 @@ public class OmniTrinketSettingsScreen extends Screen
         int tw = this.font.width(title);
         graphics.drawString(this.font, title,
                 panelLeft + (panelRight - panelLeft - tw) / 2,
-                panelTop + 7, COLOR_TEXT, false);
+                panelTop + 7, textColor, textShadow);
 
         // 底部两行提示：移到<b>按钮所在那一行</b>，水平居中于两按钮之间
         Component hint1 = t("omnitrinket.gui.hint.line1");
@@ -971,10 +1094,10 @@ public class OmniTrinketSettingsScreen extends Screen
         int hintY = panelBottom - ROW_CTRL_H - 5 + 1;
         graphics.drawString(this.font, hint1,
                 panelLeft + (panelRight - panelLeft - this.font.width(hint1)) / 2,
-                hintY, COLOR_TEXT, false);
+                hintY, textColor, textShadow);
         graphics.drawString(this.font, hint2,
                 panelLeft + (panelRight - panelLeft - this.font.width(hint2)) / 2,
-                hintY + 10, COLOR_TEXT, false);
+                hintY + 10, textColor, textShadow);
 
         if (maxScroll > 0)
         {
@@ -983,28 +1106,64 @@ public class OmniTrinketSettingsScreen extends Screen
     }
 
     /**
-     * 面板底板：手绘的原版容器配色。
+     * 面板底板：原版 {@code inventory.png} 的手动九宫格。
      *
-     * <pre>
-     *   1px 黑描边 → 浅灰底 #C6C6C6 → 白高光（上/左 1px）→ 深灰阴影（下/右 1px）
-     * </pre>
+     * <p>面板颜色不再手写，而是从原版容器贴图取 <b>4 个真实角 + 4 条边 + 中心 1×1</b>
+     * 共 9 次 {@code blit} 拼出来。这样材质包替换原版 {@code inventory.png} 后，
+     * 面板的黑边、高光、阴影与底色会自动跟随。</p>
      *
-     * <p>曾经改为用 {@code widgets.png}（原版按钮贴图）九宫格拉伸，想让面板跟随
-     * 材质包。但那张贴图本来就是画按钮用的（边框只有 1~3px），拉大到整块面板后
-     * 视觉上就是"一个巨型按钮"，故回退到手绘。</p>
+     * <p><b>为什么不用 {@code blitNineSliced}：</b>它要求四角在同一张独立九宫格源图内；
+     * 若直接裁 {@code inventory.png} 左上角 9×9，右上、左下、右下会取到填充色而不是
+     * 真实边框。这里改为按原版 176×166 布局分别取四个真实的角。</p>
+     *
+     * <p><b>为什么不用 {@code widgets.png}：</b>那张图是画按钮用的，边框只有 1~3px，
+     * 拉大到整块面板后视觉上就是"一个巨型按钮"，早先已否决。</p>
      */
     private void drawVanillaPanel(GuiGraphics graphics)
     {
-        // 外描边
-        graphics.fill(panelLeft - 1, panelTop - 1, panelRight + 1, panelBottom + 1, COLOR_OUTLINE);
-        // 底色
-        graphics.fill(panelLeft, panelTop, panelRight, panelBottom, COLOR_PANEL);
-        // 高光：上边 + 左边
-        graphics.fill(panelLeft, panelTop, panelRight, panelTop + 1, COLOR_HIGHLIGHT);
-        graphics.fill(panelLeft, panelTop, panelLeft + 1, panelBottom, COLOR_HIGHLIGHT);
-        // 阴影：下边 + 右边
-        graphics.fill(panelLeft, panelBottom - 1, panelRight, panelBottom, COLOR_SHADOW);
-        graphics.fill(panelRight - 1, panelTop, panelRight, panelBottom, COLOR_SHADOW);
+        // 外沿与旧手绘黑框对齐：旧框画在 panelLeft-1 .. panelRight+1
+        int x = panelLeft - 1;
+        int y = panelTop - 1;
+        int w = (panelRight - panelLeft) + 2;
+        int h = (panelBottom - panelTop) + 2;
+        int right = x + w - PANEL_BORDER;
+        int bottom = y + h - PANEL_BORDER;
+
+        // 四角：取原版面板的四个真实角
+        graphics.blit(PANEL_TEXTURE, x, y,
+                0, 0, PANEL_BORDER, PANEL_BORDER);
+        graphics.blit(PANEL_TEXTURE, right, y,
+                VANILLA_PANEL_WIDTH - PANEL_BORDER, 0, PANEL_BORDER, PANEL_BORDER);
+        graphics.blit(PANEL_TEXTURE, x, bottom,
+                0, VANILLA_PANEL_HEIGHT - PANEL_BORDER, PANEL_BORDER, PANEL_BORDER);
+        graphics.blit(PANEL_TEXTURE, right, bottom,
+                VANILLA_PANEL_WIDTH - PANEL_BORDER,
+                VANILLA_PANEL_HEIGHT - PANEL_BORDER,
+                PANEL_BORDER, PANEL_BORDER);
+
+        // 四边：取 1px 源条拉伸，保留原版黑边与高光/阴影
+        graphics.blit(PANEL_TEXTURE, x + PANEL_BORDER, y,
+                w - 2 * PANEL_BORDER, PANEL_BORDER,
+                PANEL_BORDER, 0, 1, PANEL_BORDER,
+                PANEL_TEXTURE_SIZE, PANEL_TEXTURE_SIZE);
+        graphics.blit(PANEL_TEXTURE, x + PANEL_BORDER, bottom,
+                w - 2 * PANEL_BORDER, PANEL_BORDER,
+                PANEL_BORDER, VANILLA_PANEL_HEIGHT - PANEL_BORDER, 1, PANEL_BORDER,
+                PANEL_TEXTURE_SIZE, PANEL_TEXTURE_SIZE);
+        graphics.blit(PANEL_TEXTURE, x, y + PANEL_BORDER,
+                PANEL_BORDER, h - 2 * PANEL_BORDER,
+                0, PANEL_BORDER, PANEL_BORDER, 1,
+                PANEL_TEXTURE_SIZE, PANEL_TEXTURE_SIZE);
+        graphics.blit(PANEL_TEXTURE, right, y + PANEL_BORDER,
+                PANEL_BORDER, h - 2 * PANEL_BORDER,
+                VANILLA_PANEL_WIDTH - PANEL_BORDER, PANEL_BORDER, PANEL_BORDER, 1,
+                PANEL_TEXTURE_SIZE, PANEL_TEXTURE_SIZE);
+
+        // 中心：1×1 填充色拉伸，避免把原版格子/玩家模型带进来
+        graphics.blit(PANEL_TEXTURE, x + PANEL_BORDER, y + PANEL_BORDER,
+                w - 2 * PANEL_BORDER, h - 2 * PANEL_BORDER,
+                PANEL_BORDER, PANEL_BORDER, 1, 1,
+                PANEL_TEXTURE_SIZE, PANEL_TEXTURE_SIZE);
     }
 
     private void drawScrollBar(GuiGraphics graphics)
