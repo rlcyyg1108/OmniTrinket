@@ -98,10 +98,10 @@ public class OmniTrinketSettingsScreen extends Screen
     private static final int PAD = 8;
     /**
      * 内容区预留行数 —— 取所有分类中的最大值。
-     * <p>飞行 6 / 生存 6 / 移动 5 / 增益 4 / 环境 2 ⇒ 取 6。
+     * <p>飞行 6 / 生存 6 / 移动 7 / 增益 4 / 环境 2 ⇒ 取 7。
      * 这样面板高度固定，侧边栏（5 行）永远不会溢出。</p>
      */
-    private static final int MAX_ROWS = 6;
+    private static final int MAX_ROWS = 7;
 
     // ---- 面板贴图（原版容器 GUI，材质包可覆盖）----
     /**
@@ -171,6 +171,7 @@ public class OmniTrinketSettingsScreen extends Screen
 
     private final List<NumberRow> numberRows = new ArrayList<>();
     private final List<ToggleRow> toggleRows = new ArrayList<>();
+    private final List<ModeRow> modeRows = new ArrayList<>();
 
     // ---- 滚动 ----
     private int contentH;
@@ -225,13 +226,29 @@ public class OmniTrinketSettingsScreen extends Screen
 
         void set(double v)
         {
+            if (!Double.isFinite(v))
+            {
+                v = defaultValue;
+            }
             setter.accept(Math.max(min, Math.min(max, v)));
         }
 
         String display()
         {
-            return decimals <= 0 ? String.valueOf((long) Math.round(get()))
-                    : String.format("%." + decimals + "f", get());
+            if (decimals <= 0)
+            {
+                return String.valueOf((long) Math.round(get()));
+            }
+            String s = String.format(java.util.Locale.ROOT, "%." + decimals + "f", get());
+            if (s.indexOf('.') >= 0)
+            {
+                s = s.replaceAll("0+$", "");
+                if (s.endsWith("."))
+                {
+                    s = s.substring(0, s.length() - 1);
+                }
+            }
+            return s;
         }
     }
 
@@ -262,6 +279,31 @@ public class OmniTrinketSettingsScreen extends Screen
         void refresh()
         {
             button.setMessage(onOff(getter.getAsBoolean()));
+        }
+    }
+
+    /** 三态模式行（右键重置用） */
+    private static final class ModeRow
+    {
+        final Button button;
+        final PlayerSettingKey<Integer> settingsKey;
+        final int defaultValue;
+        final String[] labelKeys;
+
+        ModeRow(Button button, PlayerSettingKey<Integer> settingsKey,
+                int defaultValue, String[] labelKeys)
+        {
+            this.button = button;
+            this.settingsKey = settingsKey;
+            this.defaultValue = defaultValue;
+            this.labelKeys = labelKeys;
+        }
+
+        void refresh()
+        {
+            int mode = Math.max(0, Math.min(labelKeys.length - 1,
+                    ClientSettingsCache.getInt(settingsKey)));
+            button.setMessage(Component.translatable(labelKeys[mode]));
         }
     }
 
@@ -448,6 +490,7 @@ public class OmniTrinketSettingsScreen extends Screen
         labelRows.clear();
         numberRows.clear();
         toggleRows.clear();
+        modeRows.clear();
 
         for (AbstractWidget w : footerWidgets)
         {
@@ -550,6 +593,12 @@ public class OmniTrinketSettingsScreen extends Screen
         y = addPlayerToggle(x, y, w, "omnitrinket.gui.sprint.resumeSprint",
                 () -> ClientSettingsCache.getBoolean(PlayerSettings.SPRINT_RESUME),
                 PlayerSettings.SPRINT_RESUME);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.sprint.stepAssist",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.MOVE_STEP_ASSIST),
+                PlayerSettings.MOVE_STEP_ASSIST);
+        y = addPlayerToggle(x, y, w, "omnitrinket.gui.sprint.noKnockback",
+                () -> ClientSettingsCache.getBoolean(PlayerSettings.MOVE_NO_KNOCKBACK),
+                PlayerSettings.MOVE_NO_KNOCKBACK);
         y = addPlayerNumber(x, y, w, "omnitrinket.gui.sprint.speed", PlayerSettings.MOVE_SPEED);
         y = addPlayerNumber(x, y, w, "omnitrinket.gui.sprint.jump", PlayerSettings.JUMP_HEIGHT);
         addPlayerInt(x, y, w, "omnitrinket.gui.sprint.resumeSprintTicks",
@@ -561,12 +610,16 @@ public class OmniTrinketSettingsScreen extends Screen
         y = addPlayerToggle(x, y, w, "omnitrinket.gui.survival.enabled",
                 () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_ENABLED),
                 PlayerSettings.SURVIVAL_ENABLED);
-        y = addPlayerToggle(x, y, w, "omnitrinket.gui.survival.fullDamageImmunity",
-                () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_NO_DAMAGE),
-                PlayerSettings.SURVIVAL_NO_DAMAGE);
-        y = addPlayerToggle(x, y, w, "omnitrinket.gui.survival.allowVoidDamage",
-                () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_VOID_DAMAGE),
-                PlayerSettings.SURVIVAL_VOID_DAMAGE);
+        y = addPlayerMode(x, y, w, "omnitrinket.gui.survival.damageMode",
+                PlayerSettings.SURVIVAL_DAMAGE_MODE,
+                "omnitrinket.gui.off",
+                "omnitrinket.gui.survival.damageMode.allowVoid",
+                "omnitrinket.gui.survival.damageMode.full");
+        y = addPlayerMode(x, y, w, "omnitrinket.gui.survival.negativeMode",
+                PlayerSettings.SURVIVAL_NEGATIVE_MODE,
+                "omnitrinket.gui.off",
+                "omnitrinket.gui.survival.negativeMode.harmful",
+                "omnitrinket.gui.survival.negativeMode.all");
         y = addPlayerToggle(x, y, w, "omnitrinket.gui.survival.noUnderwaterMiningSlowdown",
                 () -> ClientSettingsCache.getBoolean(PlayerSettings.SURVIVAL_NO_WATER_MINING),
                 PlayerSettings.SURVIVAL_NO_WATER_MINING);
@@ -667,15 +720,51 @@ public class OmniTrinketSettingsScreen extends Screen
         {
             tr.refresh();
         }
+        refreshModes();
+    }
+
+    private void refreshModes()
+    {
+        for (ModeRow mr : modeRows)
+        {
+            mr.refresh();
+        }
+    }
+
+    /**
+     * 每玩家三态模式行：左键循环 0 → 1 → 2，右键恢复默认值。
+     */
+    private int addPlayerMode(int x, int y, int w, String key,
+                              PlayerSettingKey<Integer> settingsKey, String... modeKeys)
+    {
+        int groupW = numberGroupW();
+        int initial = Math.max(0, Math.min(modeKeys.length - 1,
+                ClientSettingsCache.getInt(settingsKey)));
+        Button btn = Button.builder(Component.translatable(modeKeys[initial]), b ->
+                {
+                    commitEditing();
+                    int current = Math.max(0, Math.min(modeKeys.length - 1,
+                            ClientSettingsCache.getInt(settingsKey)));
+                    int next = (current + 1) % modeKeys.length;
+                    ClientSettingsCache.setInt(settingsKey, next);
+                    NetworkHandler.CHANNEL.sendToServer(
+                            SetPlayerSettingsPacket.ofInt(settingsKey, next));
+                    refreshModes();
+                })
+                .bounds(x + w - groupW, y, groupW, ROW_CTRL_H)
+                .build();
+        addRenderableWidget(btn);
+        rows.add(btn);
+        modeRows.add(new ModeRow(btn, settingsKey, settingsKey.defaultValue(), modeKeys));
+        labelRows.add(new LabelRow(t(key), x, y + (ROW_CTRL_H - 8) / 2 + 1));
+        return y + ROW_H;
     }
 
     private int addNumber(int x, int y, int w, String key,
                           java.util.function.DoubleSupplier getter,
                           java.util.function.DoubleConsumer setter,
-                          double defaultValue, double min, double max)
+                          int decimals, double defaultValue, double min, double max)
     {
-        int decimals = (defaultValue == Math.floor(defaultValue)) ? 0 : 2;
-
         int resetX = x + w - BTN_W;
         int plusX = resetX - GAP - BTN_W;
         int boxX = plusX - GAP - VALUE_W;
@@ -780,7 +869,7 @@ public class OmniTrinketSettingsScreen extends Screen
         return addNumber(x, y, w, key,
                 () -> ClientSettingsCache.getInt(field),
                 v -> setPlayerInt(field, (int) Math.round(v)),
-                field.defaultValue(), field.min(), field.max());
+                0, field.defaultValue(), field.min(), field.max());
     }
 
     /** 每玩家数值行：取值器 / 写入器 / 默认值 / 上下限全部来自描述符，调用方只给一项 */
@@ -789,7 +878,7 @@ public class OmniTrinketSettingsScreen extends Screen
         return addNumber(x, y, w, key,
                 () -> ClientSettingsCache.getDouble(field),
                 v -> setPlayerDouble(field, v),
-                field.defaultValue(), field.min(), field.max());
+                2, field.defaultValue(), field.min(), field.max());
     }
 
     // ------------------------------------------------------------------
@@ -955,6 +1044,17 @@ public class OmniTrinketSettingsScreen extends Screen
                         tr.setter.accept(tr.defaultValue);
                     }
                     tr.refresh();
+                    return true;
+                }
+            }
+            for (ModeRow mr : modeRows)
+            {
+                if (mr.button.isMouseOver(mouseX, mouseY))
+                {
+                    ClientSettingsCache.setInt(mr.settingsKey, mr.defaultValue);
+                    NetworkHandler.CHANNEL.sendToServer(
+                            SetPlayerSettingsPacket.ofInt(mr.settingsKey, mr.defaultValue));
+                    mr.refresh();
                     return true;
                 }
             }

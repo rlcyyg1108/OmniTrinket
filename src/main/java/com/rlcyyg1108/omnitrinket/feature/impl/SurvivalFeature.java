@@ -3,15 +3,20 @@ package com.rlcyyg1108.omnitrinket.feature.impl;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettingsAccess;
 import com.rlcyyg1108.omnitrinket.feature.TrinketFeature;
 import com.rlcyyg1108.omnitrinket.setting.PlayerSettings;
+import net.minecraft.world.effect.MobEffectCategory;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import top.theillusivec4.curios.api.SlotContext;
+
+import java.util.List;
 
 /**
  * 生存模块。
  *
  * 包含：
- * - 完全免伤（含虚空伤害开关）
+ * - 免伤三态（关 / 允许虚空伤害 / 完全免伤）
+ * - 负面免疫三态（关 / 仅负面 / 负面 + 中性）
  * - 水下挖掘不减速
  * - 水下不消耗氧气
  * - 去掉屏幕上的火焰动画
@@ -51,6 +56,24 @@ public class SurvivalFeature implements TrinketFeature
             if (player.getAirSupply() < maxAir)
             {
                 player.setAirSupply(maxAir);
+            }
+        }
+
+        // 免疫负面效果：按三态清理已有 HARMFUL / NEUTRAL
+        if (!player.level().isClientSide())
+        {
+            int mode = PlayerSettingsAccess.integer(player, PlayerSettings.SURVIVAL_NEGATIVE_MODE);
+            if (mode > 0)
+            {
+                for (MobEffectInstance effect : List.copyOf(player.getActiveEffects()))
+                {
+                    MobEffectCategory category = effect.getEffect().getCategory();
+                    if (category == MobEffectCategory.HARMFUL
+                            || (mode >= 2 && category == MobEffectCategory.NEUTRAL))
+                    {
+                        player.removeEffect(effect.getEffect());
+                    }
+                }
             }
         }
     }

@@ -29,7 +29,7 @@ import java.util.List;
  * - X：快捷切换飞行档位（1/2/3/5/10 循环）
  * - Z：切换夜视开关
  * - 其余开关默认<b>未绑定</b>，可在"控制"里自行绑定：饱和 / 锁定飞行 / 无惯性 /
- *   免疫全部伤害 / 不消耗氧气 / 撞墙后恢复冲刺 / 保留虚空伤害（见 {@code TOGGLE_BINDINGS} 表）
+ *   不消耗氧气 / 撞墙后恢复冲刺；免伤键为三态循环（见 {@code TOGGLE_BINDINGS} / {@code MODE_BINDINGS}）
  *
  * <p>飞行档位这类需要"服务端状态才能算出下一个值"的操作只发包请求；
  * 开关类（夜视 / 饱和 / …）客户端已知目标值，先本地乐观更新（手感零延迟），
@@ -61,14 +61,26 @@ public final class ClientEvents
                     "omnitrinket.hud.fly_locked"),
             new ToggleBinding(KeyBindings.TOGGLE_FLY_NO_INERTIA, PlayerSettings.FLY_NO_INERTIA,
                     "omnitrinket.hud.fly_no_inertia"),
-            new ToggleBinding(KeyBindings.TOGGLE_DAMAGE_IMMUNITY, PlayerSettings.SURVIVAL_NO_DAMAGE,
-                    "omnitrinket.hud.damage_immunity"),
             new ToggleBinding(KeyBindings.TOGGLE_NO_OXYGEN, PlayerSettings.SURVIVAL_NO_OXYGEN,
                     "omnitrinket.hud.no_oxygen"),
             new ToggleBinding(KeyBindings.TOGGLE_SPRINT_RESUME, PlayerSettings.SPRINT_RESUME,
-                    "omnitrinket.hud.sprint_resume"),
-            new ToggleBinding(KeyBindings.TOGGLE_VOID_DAMAGE, PlayerSettings.SURVIVAL_VOID_DAMAGE,
-                    "omnitrinket.hud.void_damage"));
+                    "omnitrinket.hud.sprint_resume"));
+
+    /** 三态模式快捷键：按键循环 0 → 1 → 2 */
+    private record ModeBinding(KeyMapping key, PlayerSettingKey<Integer> setting,
+                               String hudKey, String[] modeKeys)
+    {
+    }
+
+    private static final List<ModeBinding> MODE_BINDINGS = List.of(
+            new ModeBinding(KeyBindings.TOGGLE_DAMAGE_IMMUNITY,
+                    PlayerSettings.SURVIVAL_DAMAGE_MODE,
+                    "omnitrinket.hud.damage_mode",
+                    new String[]{
+                            "omnitrinket.gui.off",
+                            "omnitrinket.gui.survival.damageMode.allowVoid",
+                            "omnitrinket.gui.survival.damageMode.full"
+                    }));
 
     private ClientEvents()
     {
@@ -144,8 +156,8 @@ public final class ClientEvents
         }
 
         // 开关类快捷键（表驱动）：默认只有 Z（夜视）带键，其余（饱和 / 锁定飞行 /
-        // 无惯性 / 免疫全部伤害 / 不消耗氧气 / 撞墙后恢复冲刺 / 保留虚空伤害）
-        // 默认未绑定，玩家在"控制"里按需绑定。未绑定的键不会产生点击，天然无副作用。
+        // 无惯性 / 不消耗氧气 / 撞墙后恢复冲刺）默认未绑定，玩家在"控制"里按需绑定。
+        // 未绑定的键不会产生点击，天然无副作用。
         for (ToggleBinding t : TOGGLE_BINDINGS)
         {
             while (t.key().consumeClick())
@@ -153,6 +165,18 @@ public final class ClientEvents
                 if (wearing)
                 {
                     toggleFlag(t);
+                }
+            }
+        }
+
+        // 三态模式：免伤键循环 0 → 1 → 2
+        for (ModeBinding m : MODE_BINDINGS)
+        {
+            while (m.key().consumeClick())
+            {
+                if (wearing)
+                {
+                    cycleMode(m);
                 }
             }
         }
@@ -175,6 +199,20 @@ public final class ClientEvents
                 Component.translatable(next ? "omnitrinket.gui.on" : "omnitrinket.gui.off")));
     }
 
+    /**
+     * 循环切换一个三态模式，并在 HUD 显示当前模式。
+     */
+    private static void cycleMode(ModeBinding m)
+    {
+        int max = m.modeKeys().length - 1;
+        int current = Math.max(0, Math.min(max, ClientSettingsCache.getInt(m.setting())));
+        int next = (current + 1) % m.modeKeys().length;
+        ClientSettingsCache.setInt(m.setting(), next);
+        NetworkHandler.CHANNEL.sendToServer(SetPlayerSettingsPacket.ofInt(m.setting(), next));
+        FlightHudOverlay.show(Component.translatable(m.hudKey(),
+                Component.translatable(m.modeKeys()[next])));
+    }
+
     /** 把全部按键的点击队列排空 */
     private static void drainKeybinds()
     {
@@ -190,6 +228,12 @@ public final class ClientEvents
         {
             // 开关类：同样只排空；未绑定的键不产生点击，天然无影响
             while (t.key().consumeClick())
+            {
+            }
+        }
+        for (ModeBinding m : MODE_BINDINGS)
+        {
+            while (m.key().consumeClick())
             {
             }
         }

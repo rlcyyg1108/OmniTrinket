@@ -89,19 +89,27 @@ public class PlayerSettings
     public static final PlayerSettingKey<Integer> SPRINT_RESUME_TICKS =
             PlayerSettingKey.integer("SprintResumeTicks", 10, 1, 100);
 
+    /** 自动上台阶：步高从原版 0.6 提到 1.0，可直接走上一格（双端） */
+    public static final PlayerSettingKey<Boolean> MOVE_STEP_ASSIST =
+            PlayerSettingKey.bool("StepAssist", false);
+
+    /** 无击退：取消普通攻击 / 怪物攻击 / 盾牌格挡等路径产生的击退（默认开启） */
+    public static final PlayerSettingKey<Boolean> MOVE_NO_KNOCKBACK =
+            PlayerSettingKey.bool("NoKnockback", true);
+
     // ---------------- 生存 ----------------
 
     /** 生存模块总开关 */
     public static final PlayerSettingKey<Boolean> SURVIVAL_ENABLED =
             PlayerSettingKey.bool("SurvivalEnabled", true);
 
-    /** 免疫全部伤害 */
-    public static final PlayerSettingKey<Boolean> SURVIVAL_NO_DAMAGE =
-            PlayerSettingKey.bool("FullDamageImmunity", true);
+    /** 免伤模式：0 关 / 1 免疫但允许虚空 / 2 完全免伤（含虚空） */
+    public static final PlayerSettingKey<Integer> SURVIVAL_DAMAGE_MODE =
+            PlayerSettingKey.integer("DamageMode", 1, 0, 2);
 
-    /** 是否保留虚空伤害（默认保留，避免掉进虚空后永远脱不了身） */
-    public static final PlayerSettingKey<Boolean> SURVIVAL_VOID_DAMAGE =
-            PlayerSettingKey.bool("AllowVoidDamage", true);
+    /** 负面效果免疫模式：0 关 / 1 仅 HARMFUL / 2 HARMFUL + NEUTRAL */
+    public static final PlayerSettingKey<Integer> SURVIVAL_NEGATIVE_MODE =
+            PlayerSettingKey.integer("NegativeEffectMode", 1, 0, 2);
 
     /** 水下挖掘不减速 */
     public static final PlayerSettingKey<Boolean> SURVIVAL_NO_WATER_MINING =
@@ -160,8 +168,8 @@ public class PlayerSettings
     /** 全部布尔项 */
     public static final List<PlayerSettingKey<Boolean>> BOOLEAN_KEYS =
             List.of(FLY_ENABLED, FLY_NO_INERTIA, FLY_NO_MINING_SLOWDOWN,
-                    SPRINT_ENABLED, SPRINT_RESUME,
-                    SURVIVAL_ENABLED, SURVIVAL_NO_DAMAGE, SURVIVAL_VOID_DAMAGE,
+                    SPRINT_ENABLED, SPRINT_RESUME, MOVE_STEP_ASSIST, MOVE_NO_KNOCKBACK,
+                    SURVIVAL_ENABLED,
                     SURVIVAL_NO_WATER_MINING, SURVIVAL_NO_OXYGEN, SURVIVAL_NO_FIRE_OVERLAY,
                     NIGHT_VISION, SATURATION, BUFF_ENABLED,
                     FLY_GRANTED, FLY_LOCKED);
@@ -172,7 +180,7 @@ public class PlayerSettings
 
     /** 全部整数项 */
     public static final List<PlayerSettingKey<Integer>> INT_KEYS =
-            List.of(SPRINT_RESUME_TICKS);
+            List.of(SPRINT_RESUME_TICKS, SURVIVAL_DAMAGE_MODE, SURVIVAL_NEGATIVE_MODE);
 
     // ==================================================================
     // 数据
@@ -272,6 +280,10 @@ public class PlayerSettings
         {
             tag.putInt(key.nbtKey(), getInt(key));
         }
+        // 旧布尔键已迁移到三态 int，不再写回
+        tag.remove("FullDamageImmunity");
+        tag.remove("AllowVoidDamage");
+        tag.remove("NoNegativeEffects");
     }
 
     public void loadNBTData(CompoundTag tag)
@@ -301,6 +313,24 @@ public class PlayerSettings
             {
                 integers.put(key.nbtKey(), key.clampInt(tag.getInt(key.nbtKey())));
             }
+        }
+
+        // 旧存档迁移：仅在新模式键缺失时读取旧布尔键。
+        // 旧默认是 FullDamageImmunity=true / AllowVoidDamage=true / NoNegativeEffects=false。
+        if (!tag.contains(SURVIVAL_DAMAGE_MODE.nbtKey())
+                && (tag.contains("FullDamageImmunity") || tag.contains("AllowVoidDamage")))
+        {
+            boolean immune = !tag.contains("FullDamageImmunity")
+                    || tag.getBoolean("FullDamageImmunity");
+            boolean allowVoid = !tag.contains("AllowVoidDamage")
+                    || tag.getBoolean("AllowVoidDamage");
+            integers.put(SURVIVAL_DAMAGE_MODE.nbtKey(),
+                    SURVIVAL_DAMAGE_MODE.clampInt(!immune ? 0 : (allowVoid ? 1 : 2)));
+        }
+        if (!tag.contains(SURVIVAL_NEGATIVE_MODE.nbtKey()) && tag.contains("NoNegativeEffects"))
+        {
+            integers.put(SURVIVAL_NEGATIVE_MODE.nbtKey(),
+                    SURVIVAL_NEGATIVE_MODE.clampInt(tag.getBoolean("NoNegativeEffects") ? 1 : 0));
         }
     }
 }

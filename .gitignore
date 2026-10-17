@@ -10,6 +10,9 @@ logs/
 VIBE_CODING_GUIDE.md
 .workbuddy/
 .codebuddy/
+run-client.bat
+build.bat
+
 # ===== Gradle =====
 .gradle/
 

@@ -10,8 +10,13 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 移动模块的运行时驱动（双端）。
@@ -57,12 +62,31 @@ import net.minecraftforge.fml.common.Mod;
  * 所以两端算出的 FOV 一致，不会出现"服务端一个值、客户端一个值"的抖动。</p>
  *
  * <p><b>跳跃高度</b>不在本类 —— 它由 {@link JumpEvents} 用 Forge 事件实现。</p>
+ *
+ * <h3>新增开关</h3>
+ * <p><b>自动上台阶</b>直接改 {@code Entity.maxUpStep}（1.20.1 没有步高属性）；
+ * 只在启用时记录并修改，关闭 / 摘下后只对开过的玩家恢复原版 0.6，避免压掉其它模组的步高。</p>
+ * <p><b>无击退</b>取消 {@link LivingKnockBackEvent}，覆盖普通攻击 / 怪物攻击 / 盾牌格挡；
+ * 直接改 {@code deltaMovement} 的击退不覆盖。</p>
  */
 @Mod.EventBusSubscriber(modid = OmniTrinket.MODID)
 public final class SprintEvents
 {
     /** 原版玩家的基础移动速度：Abilities.walkingSpeed 与 MOVEMENT_SPEED 默认值都是 0.1 */
     public static final double VANILLA_WALK_SPEED = 0.1D;
+
+    /** 原版玩家步高 */
+    private static final float VANILLA_STEP_HEIGHT = 0.6F;
+    /** 自动上台阶的步高：1.0 可走上一整格 */
+    private static final float STEP_ASSIST_HEIGHT = 1.0F;
+
+    /**
+     * 已由本模组改过步高的玩家。
+     *
+     * <p>只对“真正开过自动上台阶”的玩家恢复 0.6，避免每 tick 把没戴饰品的玩家
+     * 或其它模组设置的步高一起压回原版。</p>
+     */
+    private static final Set<UUID> STEP_ASSIST_APPLIED = ConcurrentHashMap.newKeySet();
 
     private SprintEvents()
     {
@@ -99,6 +123,56 @@ public final class SprintEvents
             factor = 1.0D;
         }
         applyWalkSpeed(player, (float) (VANILLA_WALK_SPEED * factor));
+        applyStepAssist(player, active);
+    }
+
+    /**
+     * 自动上台阶：启用时把步高提到 1.0，关闭/摘下后只对开过的玩家恢复 0.6。
+     *
+     * <p>1.20.1 没有 Forge 的步高属性，只能直接改 {@code Entity.maxUpStep}；
+     * 两端都要执行，客户端预测与服务端校验才一致。</p>
+     */
+    private static void applyStepAssist(Player player, boolean active)
+    {
+        boolean stepAssist = active
+                && PlayerSettingsAccess.bool(player, PlayerSettings.MOVE_STEP_ASSIST);
+        if (stepAssist)
+        {
+            setStepHeight(player, STEP_ASSIST_HEIGHT);
+            STEP_ASSIST_APPLIED.add(player.getUUID());
+        }
+        else if (STEP_ASSIST_APPLIED.remove(player.getUUID()))
+        {
+            setStepHeight(player, VANILLA_STEP_HEIGHT);
+        }
+    }
+
+    private static void setStepHeight(Player player, float target)
+    {
+        if (Math.abs(player.maxUpStep() - target) > 1.0E-4F)
+        {
+            player.setMaxUpStep(target);
+        }
+    }
+
+    /**
+     * 无击退：取消普通攻击 / 怪物攻击 / 盾牌格挡等路径产生的击退。
+     *
+     * <p>部分爆炸或其它模组直接修改 {@code deltaMovement} 的击退不经过本事件。</p>
+     */
+    @SubscribeEvent
+    public static void onKnockback(LivingKnockBackEvent event)
+    {
+        if (!(event.getEntity() instanceof Player player))
+        {
+            return;
+        }
+        if (PlayerSettingsAccess.bool(player, PlayerSettings.SPRINT_ENABLED)
+                && PlayerSettingsAccess.bool(player, PlayerSettings.MOVE_NO_KNOCKBACK)
+                && TrinketHelper.isEquipped(player))
+        {
+            event.setCanceled(true);
+        }
     }
 
     /**

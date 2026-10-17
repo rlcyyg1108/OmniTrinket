@@ -11,29 +11,27 @@
 
 | 模块 | 内容 |
 | --- | --- |
-| 飞行 | 双击跳跃开关飞行、无惯性、锁定飞行、去除浮空挖掘减速、五档速度档位（1/2/3/5/10） |
-| 移动 | 移速 / 跳跃倍率、撞墙后恢复冲刺 |
-| 生存 | 完全免伤、允许虚空伤害、去除水下挖掘减速、不消耗氧气、去除着火屏幕特效 |
+| 飞行 | 无惯性、锁定飞行、去除浮空挖掘减速、五档速度（1/2/3/5/10） |
+| 移动 | 移速 / 跳跃倍率、撞墙后恢复冲刺、自动上台阶、无击退 |
+| 生存 | 免伤、免疫负面效果、去除水下挖掘减速、不消耗氧气、去除着火屏幕特效 |
 | 增益 | 夜视、饱和、触及范围 |
-| 环境 | 锁定晴天、终日为白|
+| 环境 | 锁定晴天、终日为白 |
 
 ***
 
 # Omni Trinket
-
-Added a multi-functional trinket for personal use.  
+Adds a multi-purpose trinket for personal use.  
 All features can be toggled in the settings UI.  
-Not heavily tested in multiplayer, functionality is not guaranteed.  
+Multiplayer testing has not been performed; proper functionality is not guaranteed.  
 
-**Supported Minecraft versions**: 1.20.1 Forge  
-**Required dependency**: Curios API (5.14.1+)  
+**Supported Minecraft Version**: 1.20.1 Forge  
+**Required Mod**: Curios API (5.14.1+)  
 
-## Feature List
-
+## Feature Overview
 | Module | Content |
 | --- | --- |
-| Flight | Double-jump to toggle flight; no inertia; flight lock; 5 speed levels (1/2/3/5/10) |
-| Movement | Movement speed / jump multiplier; dash recovery after hitting walls |
-| Survival | Full damage immunity; void damage toggle; no mining slowdown underwater; no oxygen consumption; remove fire overlay |
-| Buffs | Night vision, saturation, reach range |
-| World | Lock clear weather; permanent daylight |
+| Flight | No inertia, Locked Flight, Remove floating mining slowdown, 5 speed levels (1/2/3/5/10) |
+| Movement | Movement / Jump multiplier, Restore dash after wall collision, Auto step, No knockback |
+| Survival | Damage immunity, Debuff immunity, Remove underwater mining slowdown, No oxygen consumption, Remove burning screen overlay |
+| Buffs | Night vision, Saturation, Reach range |
+| Environment | Lock clear weather, Permanent daylight |

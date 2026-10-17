@@ -93,7 +93,7 @@ public final class KeyBindings
             CATEGORY
     );
 
-    /** 切换免疫全部伤害（默认未绑定） */
+    /** 循环切换免伤三态（默认未绑定；0 关 → 1 允许虚空 → 2 完全免伤） */
     public static final KeyMapping TOGGLE_DAMAGE_IMMUNITY = new KeyMapping(
             "key.omnitrinket.toggle_damage_immunity",
             KeyConflictContext.IN_GAME,
@@ -120,15 +120,6 @@ public final class KeyBindings
             CATEGORY
     );
 
-    /** 切换保留虚空伤害（默认未绑定） */
-    public static final KeyMapping TOGGLE_VOID_DAMAGE = new KeyMapping(
-            "key.omnitrinket.toggle_void_damage",
-            KeyConflictContext.IN_GAME,
-            InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_UNKNOWN,
-            CATEGORY
-    );
-
     private KeyBindings()
     {
     }
@@ -145,6 +136,5 @@ public final class KeyBindings
         event.register(TOGGLE_DAMAGE_IMMUNITY);
         event.register(TOGGLE_NO_OXYGEN);
         event.register(TOGGLE_SPRINT_RESUME);
-        event.register(TOGGLE_VOID_DAMAGE);
     }
 }
