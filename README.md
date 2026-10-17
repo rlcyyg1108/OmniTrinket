@@ -20,14 +20,15 @@
 ***
 
 # Omni Trinket
-Adds a multi-purpose trinket for personal use.  
+
+Added a multi-functional trinket for personal use.  
 All features can be toggled in the settings UI.  
-Multiplayer testing has not been performed; proper functionality is not guaranteed.  
+Not heavily tested in multiplayer, functionality is not guaranteed.  
 
-**Supported Minecraft Version**: 1.20.1 Forge  
-**Required Mod**: Curios API (5.14.1+)  
+**Supported Minecraft versions**: 1.20.1 Forge  
+**Required dependency**: Curios API (5.14.1+)  
 
-## Feature Overview
+## Feature List
 | Module | Content |
 | --- | --- |
 | Flight | No inertia, Locked Flight, Remove floating mining slowdown, 5 speed levels (1/2/3/5/10) |
